@@ -37,7 +37,7 @@ export const NodeContent: React.FC<NodeContentProps> = ({
                     style={getAspectRatioStyle()}
                 >
                     {data.type === NodeType.VIDEO ? (
-                        <video src={data.resultUrl} controls autoPlay loop className="w-full h-full object-cover" onPointerDown={(e) => e.stopPropagation()} />
+                        <video src={data.resultUrl} controls loop className="w-full h-full object-cover" />
                     ) : (
                         <img src={data.resultUrl} alt="Generated" className="w-full h-full object-cover pointer-events-none" />
                     )}
