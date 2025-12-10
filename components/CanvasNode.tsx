@@ -13,6 +13,7 @@ import {
   Film
 } from 'lucide-react';
 import { NodeData, NodeStatus, NodeType } from '../types';
+import { NodeConnectors } from './canvas/NodeConnectors';
 
 interface CanvasNodeProps {
   data: NodeData;
@@ -107,13 +108,7 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
       onPointerDown={(e) => onNodePointerDown(e, data.id)}
       onContextMenu={(e) => onContextMenu(e, data.id)}
     >
-      {/* Left Connector */}
-      <button
-        onPointerDown={(e) => { e.stopPropagation(); onConnectorDown(e, data.id, 'left'); }}
-        className="absolute -left-12 w-10 h-10 rounded-full border border-neutral-700 bg-[#0f0f0f] text-neutral-400 hover:text-white hover:border-neutral-500 flex items-center justify-center transition-all opacity-0 group-hover/node:opacity-100 z-10 cursor-crosshair"
-      >
-        <Plus size={18} />
-      </button>
+      <NodeConnectors nodeId={data.id} onConnectorDown={onConnectorDown} />
 
       {/* Main Node Card */}
       <div
@@ -294,13 +289,6 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
         )}
       </div>
 
-      {/* Right Connector (Add Next Node) */}
-      <button
-        onPointerDown={(e) => { e.stopPropagation(); onConnectorDown(e, data.id, 'right'); }}
-        className="absolute -right-12 w-12 h-12 rounded-full border border-neutral-700 bg-[#0f0f0f] text-neutral-400 hover:text-white hover:border-neutral-500 flex items-center justify-center transition-all opacity-0 group-hover/node:opacity-100 z-10 cursor-crosshair"
-      >
-        <Plus size={24} />
-      </button>
     </div>
   );
 };
