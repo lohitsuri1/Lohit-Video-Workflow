@@ -104,6 +104,7 @@ export default function App() {
     groups,
     groupNodes,
     ungroupNodes,
+    cleanupInvalidGroups,
     getCommonGroup
   } = useGroupManagement();
 
@@ -148,6 +149,11 @@ export default function App() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedNodeIds, selectedConnection, deleteNodes, deleteSelectedConnection, clearSelection, clearSelectionBox]);
+
+  // Cleanup invalid groups (groups with less than 2 nodes)
+  useEffect(() => {
+    cleanupInvalidGroups(nodes, setNodes);
+  }, [nodes, cleanupInvalidGroups]);
 
   // ============================================================================
   // EVENT HANDLERS
@@ -479,8 +485,8 @@ export default function App() {
             />
           )}
 
-          {/* Selection Bounding Box - for selected nodes */}
-          {selectedNodeIds.length > 0 && !selectionBox.isActive && (
+          {/* Selection Bounding Box - for selected nodes (2 or more) */}
+          {selectedNodeIds.length > 1 && !selectionBox.isActive && (
             <SelectionBoundingBox
               selectedNodes={nodes.filter(n => selectedNodeIds.includes(n.id))}
               group={getCommonGroup(selectedNodeIds)}
@@ -503,6 +509,10 @@ export default function App() {
           {/* Group Bounding Boxes - for all groups (even when not selected) */}
           {groups.map(group => {
             const groupNodes = nodes.filter(n => n.groupId === group.id);
+
+            // Don't render if group has less than 2 nodes
+            if (groupNodes.length < 2) return null;
+
             const isSelected = groupNodes.every(n => selectedNodeIds.includes(n.id)) && groupNodes.length > 0;
 
             // Don't render if this group is already shown above (when selected)

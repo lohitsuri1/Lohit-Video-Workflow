@@ -67,6 +67,37 @@ export const useGroupManagement = () => {
     };
 
     /**
+     * Cleans up invalid groups (groups with less than 2 nodes)
+     * and clears groupId from orphaned nodes
+     * @param nodes - Current nodes array
+     * @param onUpdateNodes - Callback to update nodes
+     */
+    const cleanupInvalidGroups = (
+        nodes: NodeData[],
+        onUpdateNodes: (updater: (prev: NodeData[]) => NodeData[]) => void
+    ): void => {
+        // Find groups with less than 2 nodes
+        const invalidGroupIds: string[] = [];
+
+        groups.forEach(group => {
+            const groupNodeCount = nodes.filter(n => n.groupId === group.id).length;
+            if (groupNodeCount < 2) {
+                invalidGroupIds.push(group.id);
+            }
+        });
+
+        if (invalidGroupIds.length > 0) {
+            // Remove invalid groups
+            setGroups(prev => prev.filter(g => !invalidGroupIds.includes(g.id)));
+
+            // Clear groupId from orphaned nodes
+            onUpdateNodes(prev => prev.map(node =>
+                invalidGroupIds.includes(node.groupId || '') ? { ...node, groupId: undefined } : node
+            ));
+        }
+    };
+
+    /**
      * Gets the group that contains the specified node
      * @param nodeId - ID of the node to find group for
      * @returns The group or undefined if not found
@@ -111,6 +142,7 @@ export const useGroupManagement = () => {
         groups,
         groupNodes,
         ungroupNodes,
+        cleanupInvalidGroups,
         getGroupByNodeId,
         getGroupById,
         getCommonGroup

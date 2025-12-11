@@ -29,7 +29,9 @@ export const SelectionBoundingBox: React.FC<SelectionBoundingBoxProps> = ({
     // CALCULATIONS
     // ============================================================================
 
+    // Don't render for 0 nodes or single nodes (unless it's a group)
     if (selectedNodes.length === 0) return null;
+    if (selectedNodes.length === 1 && !group) return null;
 
     // Calculate bounding box from all selected nodes
     const NODE_WIDTH = 340;
