@@ -5,7 +5,7 @@
  * Handles drag-to-connect functionality with visual feedback.
  */
 
-import { useState, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { NodeData, Viewport } from '../types';
 
 interface ConnectionStart {
@@ -22,6 +22,7 @@ export const useConnectionDragging = () => {
     const [connectionStart, setConnectionStart] = useState<ConnectionStart | null>(null);
     const [tempConnectionEnd, setTempConnectionEnd] = useState<{ x: number; y: number } | null>(null);
     const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+    const [hoveredSide, setHoveredSide] = useState<'left' | 'right' | null>(null);
     const [selectedConnection, setSelectedConnection] = useState<{ parentId: string; childId: string } | null>(null);
     const dragStartTime = useRef<number>(0);
 
@@ -31,6 +32,7 @@ export const useConnectionDragging = () => {
 
     /**
      * Checks if mouse is hovering over a node (for connection target)
+     * Also determines which side (left or right connector) is being hovered
      * @param mouseX - Screen X coordinate
      * @param mouseY - Screen Y coordinate
      * @param nodes - Array of all nodes
@@ -52,7 +54,18 @@ export const useConnectionDragging = () => {
                 canvasY >= n.y && canvasY <= n.y + 400
             );
         });
-        setHoveredNodeId(found ? found.id : null);
+
+        if (found) {
+            setHoveredNodeId(found.id);
+
+            // Determine which side is being hovered
+            // Left connector is at x position, right connector is at x + 340
+            const nodeCenter = found.x + 170; // Middle of the node
+            setHoveredSide(canvasX < nodeCenter ? 'left' : 'right');
+        } else {
+            setHoveredNodeId(null);
+            setHoveredSide(null);
+        }
     };
 
     // ============================================================================
@@ -106,15 +119,15 @@ export const useConnectionDragging = () => {
         if (dragDuration < 200 && !hoveredNodeId) {
             onAddNext(connectionStart.nodeId, connectionStart.handle);
         }
-        // Drag to node - create connection
-        else if (hoveredNodeId) {
-            if (connectionStart.handle === 'right') {
-                // Start -> End (Parent -> Child)
+        // Drag to node - create connection based on target side
+        else if (hoveredNodeId && hoveredSide) {
+            if (hoveredSide === 'left') {
+                // Connecting to LEFT connector = target receives input (target is child)
                 onUpdateNodes(prev => prev.map(n =>
                     n.id === hoveredNodeId ? { ...n, parentId: connectionStart.nodeId } : n
                 ));
             } else {
-                // Start is Child (Left input) -> End is Parent
+                // Connecting to RIGHT connector = target provides output (target is parent)
                 onUpdateNodes(prev => prev.map(n =>
                     n.id === connectionStart.nodeId ? { ...n, parentId: hoveredNodeId } : n
                 ));
@@ -126,6 +139,7 @@ export const useConnectionDragging = () => {
         setConnectionStart(null);
         setTempConnectionEnd(null);
         setHoveredNodeId(null);
+        setHoveredSide(null);
         return true;
     };
 
