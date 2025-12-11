@@ -434,13 +434,13 @@ export default function App() {
           <span className="font-semibold text-neutral-300">Untitled</span>
         </div>
         <div className="flex items-center gap-3 pointer-events-auto">
-          <button className="bg-neutral-900 border border-neutral-700 hover:bg-neutral-800 text-xs px-3 py-1.5 rounded-full flex items-center gap-2 transition-colors">
+          <button className="bg-neutral-900 border border-neutral-700 hover:bg-neutral-800 text-sm px-5 py-2.5 rounded-full flex items-center gap-2 transition-colors">
             Gift Earn Tapies
           </button>
-          <button className="bg-neutral-900 border border-neutral-700 hover:bg-neutral-800 text-xs px-3 py-1.5 rounded-full flex items-center gap-2 transition-colors">
+          <button className="bg-neutral-900 border border-neutral-700 hover:bg-neutral-800 text-sm px-5 py-2.5 rounded-full flex items-center gap-2 transition-colors">
             200
           </button>
-          <button className="bg-neutral-900 border border-neutral-700 hover:bg-neutral-800 text-xs px-3 py-1.5 rounded-full flex items-center gap-2 transition-colors">
+          <button className="bg-neutral-900 border border-neutral-700 hover:bg-neutral-800 text-sm px-5 py-2.5 rounded-full flex items-center gap-2 transition-colors">
             ✨ Community
           </button>
           <button className="w-8 h-8 rounded-full bg-white text-black flex items-center justify-center hover:bg-neutral-200">
@@ -480,9 +480,9 @@ export default function App() {
           <div
             className="absolute -top-[10000px] -left-[10000px] w-[20000px] h-[20000px]"
             style={{
-              backgroundImage: 'radial-gradient(#333 1px, transparent 1px)',
+              backgroundImage: 'radial-gradient(#666 1px, transparent 1px)',
               backgroundSize: '20px 20px',
-              opacity: 0.3
+              opacity: 0.5
             }}
           />
 
@@ -596,17 +596,18 @@ export default function App() {
             );
           })}
         </div>
-      </div>
+      </div >
 
       {/* Context Menu */}
-      <ContextMenu
+      < ContextMenu
         state={contextMenu}
-        onClose={() => setContextMenu(prev => ({ ...prev, isOpen: false }))}
+        onClose={() => setContextMenu(prev => ({ ...prev, isOpen: false }))
+        }
         onSelectType={handleContextMenuSelect}
       />
 
       {/* Zoom Slider */}
-      <div className="fixed bottom-6 right-6 bg-neutral-900 border border-neutral-700 rounded-full px-4 py-2 flex items-center gap-3 z-50">
+      < div className="fixed bottom-6 right-6 bg-neutral-900 border border-neutral-700 rounded-full px-4 py-2 flex items-center gap-3 z-50" >
         <span className="text-xs text-neutral-400">Zoom</span>
         <input
           type="range"
@@ -618,7 +619,7 @@ export default function App() {
           className="w-32"
         />
         <span className="text-xs text-neutral-300 w-10">{Math.round(viewport.zoom * 100)}%</span>
-      </div>
-    </div>
+      </div >
+    </div >
   );
 }

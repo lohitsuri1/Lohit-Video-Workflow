@@ -151,9 +151,9 @@ export const SelectionBoundingBox: React.FC<SelectionBoundingBoxProps> = ({
                 >
                     <button
                         onClick={onGroup}
-                        className="bg-neutral-900 border border-neutral-700 hover:bg-neutral-800 text-white text-xs px-3 py-1.5 rounded flex items-center gap-2 transition-colors"
+                        className="bg-neutral-900 border border-neutral-700 hover:bg-neutral-800 text-white text-sm px-4 py-2.5 rounded flex items-center gap-2 transition-colors"
                     >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <rect x="3" y="3" width="7" height="7" />
                             <rect x="14" y="3" width="7" height="7" />
                             <rect x="14" y="14" width="7" height="7" />
@@ -170,28 +170,28 @@ export const SelectionBoundingBox: React.FC<SelectionBoundingBoxProps> = ({
                     className="absolute -top-12 left-1/2 transform -translate-x-1/2 flex gap-2 pointer-events-auto"
                 >
                     <button
-                        className="bg-neutral-900 border border-neutral-700 hover:bg-neutral-800 text-white text-xs px-3 py-1.5 rounded flex items-center gap-2 transition-colors"
+                        className="bg-neutral-900 border border-neutral-700 hover:bg-neutral-800 text-white text-sm px-4 py-2.5 rounded flex items-center gap-2 transition-colors"
                         title="Run Group (placeholder)"
                     >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <polygon points="5 3 19 12 5 21 5 3" />
                         </svg>
                         Run Group
                     </button>
                     <button
-                        className="bg-neutral-900 border border-neutral-700 hover:bg-neutral-800 text-white text-xs px-3 py-1.5 rounded flex items-center gap-2 transition-colors"
+                        className="bg-neutral-900 border border-neutral-700 hover:bg-neutral-800 text-white text-sm px-4 py-2.5 rounded flex items-center gap-2 transition-colors"
                         title="Create Workflow (placeholder)"
                     >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <path d="M12 2v6m0 4v10M2 12h6m4 0h10" />
                         </svg>
                         Create Workflow
                     </button>
                     <button
                         onClick={onUngroup}
-                        className="bg-neutral-900 border border-neutral-700 hover:bg-neutral-800 text-white text-xs px-3 py-1.5 rounded flex items-center gap-2 transition-colors"
+                        className="bg-neutral-900 border border-neutral-700 hover:bg-neutral-800 text-white text-sm px-4 py-2.5 rounded flex items-center gap-2 transition-colors"
                     >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <rect x="3" y="3" width="7" height="7" />
                             <rect x="14" y="3" width="7" height="7" />
                             <rect x="14" y="14" width="7" height="7" />
