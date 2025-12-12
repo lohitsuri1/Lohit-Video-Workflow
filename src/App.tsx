@@ -71,6 +71,20 @@ export default function App() {
     nodeId: null
   });
 
+  // Canvas title state
+  const [canvasTitle, setCanvasTitle] = useState('Untitled');
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editingTitleValue, setEditingTitleValue] = useState('Untitled');
+  const canvasTitleInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Focus input when entering edit mode
+  React.useEffect(() => {
+    if (isEditingTitle && canvasTitleInputRef.current) {
+      canvasTitleInputRef.current.focus();
+      canvasTitleInputRef.current.select();
+    }
+  }, [isEditingTitle]);
+
   // ============================================================================
   // CUSTOM HOOKS
   // ============================================================================
@@ -636,7 +650,45 @@ export default function App() {
       <div className="fixed top-0 left-0 w-full h-14 flex items-center justify-between px-6 z-50 pointer-events-none">
         <div className="flex items-center gap-3 pointer-events-auto">
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600"></div>
-          <span className="font-semibold text-neutral-300">Untitled</span>
+          {isEditingTitle ? (
+            <input
+              ref={canvasTitleInputRef}
+              type="text"
+              value={editingTitleValue}
+              onChange={(e) => setEditingTitleValue(e.target.value)}
+              onBlur={() => {
+                if (editingTitleValue.trim()) {
+                  setCanvasTitle(editingTitleValue.trim());
+                } else {
+                  setEditingTitleValue(canvasTitle);
+                }
+                setIsEditingTitle(false);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  if (editingTitleValue.trim()) {
+                    setCanvasTitle(editingTitleValue.trim());
+                  }
+                  setIsEditingTitle(false);
+                } else if (e.key === 'Escape') {
+                  setEditingTitleValue(canvasTitle);
+                  setIsEditingTitle(false);
+                }
+              }}
+              className="font-semibold text-neutral-300 bg-transparent border-b border-blue-500 outline-none min-w-[100px]"
+            />
+          ) : (
+            <span
+              className="font-semibold text-neutral-300 cursor-pointer hover:text-white transition-colors"
+              onDoubleClick={() => {
+                setEditingTitleValue(canvasTitle);
+                setIsEditingTitle(true);
+              }}
+              title="Double-click to rename"
+            >
+              {canvasTitle}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-3 pointer-events-auto">
           <button className="bg-neutral-900 border border-neutral-700 hover:bg-neutral-800 text-sm px-5 py-2.5 rounded-full flex items-center gap-2 transition-colors">
