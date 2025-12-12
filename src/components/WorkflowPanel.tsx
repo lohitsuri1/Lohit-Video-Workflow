@@ -21,13 +21,15 @@ interface WorkflowPanelProps {
     onClose: () => void;
     onLoadWorkflow: (workflowId: string) => void;
     currentWorkflowId?: string;
+    panelY?: number;
 }
 
 export const WorkflowPanel: React.FC<WorkflowPanelProps> = ({
     isOpen,
     onClose,
     onLoadWorkflow,
-    currentWorkflowId
+    currentWorkflowId,
+    panelY = 200
 }) => {
     const [workflows, setWorkflows] = useState<WorkflowSummary[]>([]);
     const [loading, setLoading] = useState(false);
@@ -83,7 +85,10 @@ export const WorkflowPanel: React.FC<WorkflowPanelProps> = ({
     return (
         <>
             {/* Main Panel */}
-            <div className="fixed left-20 top-1/2 -translate-y-1/2 w-[700px] bg-[#0a0a0a]/95 backdrop-blur-xl border border-neutral-800 rounded-2xl shadow-2xl z-40 flex flex-col overflow-hidden max-h-[500px]">
+            <div
+                className="fixed left-20 w-[700px] bg-[#0a0a0a]/95 backdrop-blur-xl border border-neutral-800 rounded-2xl shadow-2xl z-40 flex flex-col overflow-hidden max-h-[500px]"
+                style={{ top: panelY }}
+            >
                 {/* Header */}
                 <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-800">
                     <div className="flex items-center gap-6">

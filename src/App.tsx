@@ -89,6 +89,7 @@ export default function App() {
   // Workflow state
   const [workflowId, setWorkflowId] = useState<string | null>(null);
   const [isWorkflowPanelOpen, setIsWorkflowPanelOpen] = useState(false);
+  const [workflowPanelY, setWorkflowPanelY] = useState(0);
 
   // ============================================================================
   // CUSTOM HOOKS
@@ -716,7 +717,11 @@ export default function App() {
     <div className="w-screen h-screen bg-[#050505] text-white overflow-hidden select-none font-sans">
       <Toolbar
         onAddClick={handleToolbarAdd}
-        onWorkflowsClick={() => setIsWorkflowPanelOpen(!isWorkflowPanelOpen)}
+        onWorkflowsClick={(e) => {
+          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+          setWorkflowPanelY(rect.top);
+          setIsWorkflowPanelOpen(!isWorkflowPanelOpen);
+        }}
       />
 
       {/* Workflow Panel */}
@@ -725,6 +730,7 @@ export default function App() {
         onClose={() => setIsWorkflowPanelOpen(false)}
         onLoadWorkflow={handleLoadWorkflow}
         currentWorkflowId={workflowId || undefined}
+        panelY={workflowPanelY}
       />
 
       {/* Top Bar */}
