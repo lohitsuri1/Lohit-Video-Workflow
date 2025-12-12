@@ -4,12 +4,13 @@
  * Agent chat panel that slides in from the right side.
  * Shows greeting, inspiration suggestions, chat messages, and input.
  * Supports drag-drop of image/video nodes from canvas.
+ * Includes chat history panel for viewing past conversations.
  */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { X, History, Paperclip, Globe, Settings, Send, Sparkles, Plus, Loader2 } from 'lucide-react';
+import { X, History, Paperclip, Globe, Settings, Send, Sparkles, Plus, Loader2, ChevronLeft, Trash2, MessageSquare } from 'lucide-react';
 import { ChatMessage } from './ChatMessage';
-import { useChatAgent, ChatMessage as ChatMessageType } from '../hooks/useChatAgent';
+import { useChatAgent, ChatMessage as ChatMessageType, ChatSession } from '../hooks/useChatAgent';
 
 // ============================================================================
 // TYPES
@@ -45,6 +46,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     const [showTip, setShowTip] = useState(true);
     const [attachedMedia, setAttachedMedia] = useState<AttachedMedia | null>(null);
     const [isDragOver, setIsDragOver] = useState(false);
+    const [showHistory, setShowHistory] = useState(false);
 
     // Chat agent hook
     const {
@@ -52,8 +54,12 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         topic,
         isLoading,
         error,
+        sessions,
+        isLoadingSessions,
         sendMessage,
         startNewChat,
+        loadSession,
+        deleteSession,
         hasMessages,
     } = useChatAgent();
 
@@ -146,6 +152,35 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         setMessage('');
         setAttachedMedia(null);
         setShowTip(true);
+        setShowHistory(false);
+    };
+
+    const handleLoadSession = async (sessionId: string) => {
+        await loadSession(sessionId);
+        setShowHistory(false);
+        setShowTip(false);
+    };
+
+    const handleDeleteSession = async (e: React.MouseEvent, sessionId: string) => {
+        e.stopPropagation();
+        await deleteSession(sessionId);
+    };
+
+    const formatDate = (dateStr: string) => {
+        const date = new Date(dateStr);
+        const now = new Date();
+        const diffMs = now.getTime() - date.getTime();
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+        if (diffDays === 0) {
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        } else if (diffDays === 1) {
+            return 'Yesterday';
+        } else if (diffDays < 7) {
+            return `${diffDays} days ago`;
+        } else {
+            return date.toLocaleDateString();
+        }
     };
 
     // --- Render ---
@@ -173,6 +208,76 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                 </div>
             )}
 
+            {/* History Panel */}
+            {showHistory && (
+                <div className="absolute inset-0 bg-[#1a1a1a] z-20 flex flex-col">
+                    {/* History Header */}
+                    <div className="flex items-center gap-3 px-4 py-3 border-b border-neutral-800">
+                        <button
+                            onClick={() => setShowHistory(false)}
+                            className="p-1.5 hover:bg-neutral-800 rounded-lg transition-colors text-neutral-400 hover:text-white"
+                        >
+                            <ChevronLeft size={18} />
+                        </button>
+                        <span className="text-white font-medium text-sm">Chat History</span>
+                    </div>
+
+                    {/* History List */}
+                    <div className="flex-1 overflow-y-auto p-4">
+                        {isLoadingSessions ? (
+                            <div className="flex items-center justify-center py-8">
+                                <Loader2 className="w-6 h-6 text-cyan-400 animate-spin" />
+                            </div>
+                        ) : sessions.length === 0 ? (
+                            <div className="text-center py-8">
+                                <MessageSquare className="w-12 h-12 mx-auto mb-3 text-neutral-600" />
+                                <p className="text-neutral-500 text-sm">No chat history yet</p>
+                                <p className="text-neutral-600 text-xs mt-1">Start a conversation to see it here</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                {sessions.map((session: ChatSession) => (
+                                    <button
+                                        key={session.id}
+                                        onClick={() => handleLoadSession(session.id)}
+                                        className="w-full text-left p-3 bg-neutral-800/50 hover:bg-neutral-800 rounded-xl transition-colors group"
+                                    >
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-white text-sm font-medium truncate">
+                                                    {session.topic}
+                                                </p>
+                                                <p className="text-neutral-500 text-xs mt-1">
+                                                    {session.messageCount} messages · {formatDate(session.updatedAt || session.createdAt)}
+                                                </p>
+                                            </div>
+                                            <button
+                                                onClick={(e) => handleDeleteSession(e, session.id)}
+                                                className="p-1.5 opacity-0 group-hover:opacity-100 hover:bg-red-500/20 rounded-lg transition-all text-neutral-500 hover:text-red-400"
+                                                title="Delete chat"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* New Chat Button */}
+                    <div className="p-4 border-t border-neutral-800">
+                        <button
+                            onClick={handleNewChat}
+                            className="w-full py-2.5 bg-cyan-500 hover:bg-cyan-400 rounded-xl text-white font-medium text-sm transition-colors flex items-center justify-center gap-2"
+                        >
+                            <Plus size={16} />
+                            New Chat
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-800">
                 <div className="flex items-center gap-3">
@@ -193,6 +298,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                         </button>
                     )}
                     <button
+                        onClick={() => setShowHistory(true)}
                         className="p-1.5 hover:bg-neutral-800 rounded-lg transition-colors text-neutral-400 hover:text-white"
                         title="Chat History"
                     >
@@ -343,8 +449,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                                 onClick={handleSend}
                                 disabled={isLoading || (!message.trim() && !attachedMedia)}
                                 className={`p-2 rounded-full transition-colors text-white ${isLoading || (!message.trim() && !attachedMedia)
-                                        ? 'bg-neutral-600 cursor-not-allowed'
-                                        : 'bg-cyan-500 hover:bg-cyan-400'
+                                    ? 'bg-neutral-600 cursor-not-allowed'
+                                    : 'bg-cyan-500 hover:bg-cyan-400'
                                     }`}
                             >
                                 {isLoading ? (

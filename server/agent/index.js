@@ -10,21 +10,109 @@
  * LangGraph which has a more mature and feature-rich ecosystem.
  */
 
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { createChatGraph, generateTopicTitle } from "./graph/chatGraph.js";
 import { HumanMessage, AIMessage } from "@langchain/core/messages";
 
 // ============================================================================
-// SESSION MANAGEMENT
+// FILE PATHS
+// ============================================================================
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const CHATS_DIR = path.join(__dirname, '..', '..', 'assets', 'chats');
+
+// Ensure chats directory exists
+if (!fs.existsSync(CHATS_DIR)) {
+    fs.mkdirSync(CHATS_DIR, { recursive: true });
+}
+
+// ============================================================================
+// SESSION MANAGEMENT (FILE-BASED)
 // ============================================================================
 
 /**
- * In-memory session storage
- * Structure: { sessionId: { messages: [], topic: null, createdAt: Date } }
- * 
- * NOTE: For production, consider using a database or file-based storage.
- * LangGraph supports checkpointers (MemorySaver, MongoDB, etc.) for persistence.
+ * In-memory cache for active sessions
+ * Sessions are also persisted to disk after each message
  */
-const sessions = new Map();
+const sessionCache = new Map();
+
+/**
+ * Convert LangChain messages to serializable format
+ */
+function serializeMessages(messages) {
+    return messages.map(msg => ({
+        role: msg._getType?.() === 'human' ? 'user' : 'assistant',
+        content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+        // Store the original content type for multimodal messages
+        contentType: typeof msg.content === 'string' ? 'text' : 'multimodal',
+        timestamp: new Date().toISOString()
+    }));
+}
+
+/**
+ * Convert serialized messages back to LangChain format
+ */
+function deserializeMessages(messages) {
+    return messages.map(msg => {
+        const content = msg.contentType === 'multimodal'
+            ? JSON.parse(msg.content)
+            : msg.content;
+
+        if (msg.role === 'user') {
+            return new HumanMessage(content);
+        } else {
+            return new AIMessage(content);
+        }
+    });
+}
+
+/**
+ * Get the file path for a session
+ */
+function getSessionPath(sessionId) {
+    return path.join(CHATS_DIR, `${sessionId}.json`);
+}
+
+/**
+ * Save a session to disk
+ */
+function saveSession(sessionId, session) {
+    const filePath = getSessionPath(sessionId);
+    const data = {
+        id: sessionId,
+        topic: session.topic,
+        createdAt: session.createdAt,
+        updatedAt: new Date().toISOString(),
+        messages: serializeMessages(session.messages)
+    };
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+}
+
+/**
+ * Load a session from disk
+ */
+function loadSession(sessionId) {
+    const filePath = getSessionPath(sessionId);
+    if (!fs.existsSync(filePath)) {
+        return null;
+    }
+
+    try {
+        const content = fs.readFileSync(filePath, 'utf8');
+        const data = JSON.parse(content);
+        return {
+            messages: deserializeMessages(data.messages),
+            topic: data.topic,
+            createdAt: new Date(data.createdAt)
+        };
+    } catch (err) {
+        console.error(`Failed to load session ${sessionId}:`, err);
+        return null;
+    }
+}
 
 /**
  * Get or create a chat session
@@ -32,14 +120,26 @@ const sessions = new Map();
  * @returns {object} Session object
  */
 export function getSession(sessionId) {
-    if (!sessions.has(sessionId)) {
-        sessions.set(sessionId, {
-            messages: [],
-            topic: null,
-            createdAt: new Date(),
-        });
+    // Check cache first
+    if (sessionCache.has(sessionId)) {
+        return sessionCache.get(sessionId);
     }
-    return sessions.get(sessionId);
+
+    // Try to load from disk
+    const loaded = loadSession(sessionId);
+    if (loaded) {
+        sessionCache.set(sessionId, loaded);
+        return loaded;
+    }
+
+    // Create new session
+    const newSession = {
+        messages: [],
+        topic: null,
+        createdAt: new Date(),
+    };
+    sessionCache.set(sessionId, newSession);
+    return newSession;
 }
 
 /**
@@ -48,25 +148,67 @@ export function getSession(sessionId) {
  * @returns {boolean} Whether session existed and was deleted
  */
 export function deleteSession(sessionId) {
-    return sessions.delete(sessionId);
+    sessionCache.delete(sessionId);
+
+    const filePath = getSessionPath(sessionId);
+    if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+        return true;
+    }
+    return false;
 }
 
 /**
- * List all sessions (for chat history)
+ * List all sessions from disk (for chat history)
  * @returns {Array} Array of session summaries
  */
 export function listSessions() {
-    const result = [];
-    for (const [id, session] of sessions) {
-        result.push({
-            id,
-            topic: session.topic || "New Chat",
-            createdAt: session.createdAt,
-            messageCount: session.messages.length,
-        });
+    if (!fs.existsSync(CHATS_DIR)) {
+        return [];
     }
+
+    const files = fs.readdirSync(CHATS_DIR).filter(f => f.endsWith('.json'));
+    const sessions = [];
+
+    for (const file of files) {
+        try {
+            const filePath = path.join(CHATS_DIR, file);
+            const content = fs.readFileSync(filePath, 'utf8');
+            const data = JSON.parse(content);
+            sessions.push({
+                id: data.id,
+                topic: data.topic || "New Chat",
+                createdAt: data.createdAt,
+                updatedAt: data.updatedAt,
+                messageCount: data.messages?.length || 0
+            });
+        } catch (err) {
+            console.error(`Failed to read session file ${file}:`, err);
+        }
+    }
+
     // Sort by most recent first
-    return result.sort((a, b) => b.createdAt - a.createdAt);
+    return sessions.sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
+}
+
+/**
+ * Get full session data (for loading a specific chat)
+ * @param {string} sessionId - Session ID
+ * @returns {object|null} Full session data with messages
+ */
+export function getSessionData(sessionId) {
+    const filePath = getSessionPath(sessionId);
+    if (!fs.existsSync(filePath)) {
+        return null;
+    }
+
+    try {
+        const content = fs.readFileSync(filePath, 'utf8');
+        return JSON.parse(content);
+    } catch (err) {
+        console.error(`Failed to load session data ${sessionId}:`, err);
+        return null;
+    }
 }
 
 // ============================================================================
@@ -134,6 +276,9 @@ export async function sendMessage(sessionId, content, media, apiKey) {
         }
     }
 
+    // Save session to disk after each message
+    saveSession(sessionId, session);
+
     return {
         response: aiResponse.content.toString(),
         topic: topic,
@@ -151,6 +296,7 @@ export default {
     getSession,
     deleteSession,
     listSessions,
+    getSessionData,
     sendMessage,
     createChatGraph,
     generateTopicTitle,

@@ -5,7 +5,7 @@
  * Manages messages, sessions, topics, and API communication.
  */
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 
 // ============================================================================
 // TYPES
@@ -25,7 +25,8 @@ export interface ChatMessage {
 export interface ChatSession {
     id: string;
     topic: string;
-    createdAt: Date;
+    createdAt: string;
+    updatedAt?: string;
     messageCount: number;
 }
 
@@ -35,8 +36,13 @@ interface UseChatAgentReturn {
     sessionId: string | null;
     isLoading: boolean;
     error: string | null;
+    sessions: ChatSession[];
+    isLoadingSessions: boolean;
     sendMessage: (content: string, media?: { type: 'image' | 'video'; url: string; base64?: string }) => Promise<void>;
     startNewChat: () => void;
+    loadSession: (sessionId: string) => Promise<void>;
+    deleteSession: (sessionId: string) => Promise<void>;
+    refreshSessions: () => Promise<void>;
     hasMessages: boolean;
 }
 
@@ -69,6 +75,8 @@ export function useChatAgent(): UseChatAgentReturn {
     const [sessionId, setSessionId] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [sessions, setSessions] = useState<ChatSession[]>([]);
+    const [isLoadingSessions, setIsLoadingSessions] = useState(false);
 
     // Use ref to track if we've initialized a session
     const hasInitializedRef = useRef(false);
@@ -86,6 +94,82 @@ export function useChatAgent(): UseChatAgentReturn {
         }
         return sessionId;
     }, [sessionId]);
+
+    /**
+     * Fetch all chat sessions from the server
+     */
+    const refreshSessions = useCallback(async () => {
+        setIsLoadingSessions(true);
+        try {
+            const response = await fetch('/api/chat/sessions');
+            if (response.ok) {
+                const data = await response.json();
+                setSessions(data);
+            }
+        } catch (err) {
+            console.error('Failed to fetch sessions:', err);
+        } finally {
+            setIsLoadingSessions(false);
+        }
+    }, []);
+
+    /**
+     * Load a specific session by ID
+     */
+    const loadSession = useCallback(async (targetSessionId: string) => {
+        setIsLoading(true);
+        setError(null);
+
+        try {
+            const response = await fetch(`/api/chat/sessions/${targetSessionId}`);
+            if (!response.ok) {
+                throw new Error('Session not found');
+            }
+
+            const data = await response.json();
+
+            // Convert messages to ChatMessage format
+            const loadedMessages: ChatMessage[] = data.messages.map((msg: any, index: number) => ({
+                id: `loaded-${targetSessionId}-${index}`,
+                role: msg.role,
+                content: msg.content,
+                timestamp: new Date(msg.timestamp || data.createdAt),
+            }));
+
+            setSessionId(targetSessionId);
+            setMessages(loadedMessages);
+            setTopic(data.topic);
+        } catch (err: unknown) {
+            const errorMessage = err instanceof Error ? err.message : 'Failed to load session';
+            setError(errorMessage);
+            console.error('Load session error:', err);
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
+    /**
+     * Delete a session
+     */
+    const deleteSession = useCallback(async (targetSessionId: string) => {
+        try {
+            await fetch(`/api/chat/sessions/${targetSessionId}`, {
+                method: 'DELETE',
+            });
+
+            // Refresh sessions list
+            await refreshSessions();
+
+            // If we deleted the current session, start a new one
+            if (targetSessionId === sessionId) {
+                setMessages([]);
+                setTopic(null);
+                setSessionId(generateSessionId());
+            }
+        } catch (err) {
+            console.error('Failed to delete session:', err);
+        }
+    }, [sessionId, refreshSessions]);
 
     /**
      * Send a message to the chat agent
@@ -142,17 +226,17 @@ export function useChatAgent(): UseChatAgentReturn {
             if (data.topic) {
                 setTopic(data.topic);
             }
+
+            // Refresh sessions list to show the new/updated session
+            await refreshSessions();
         } catch (err: unknown) {
             const errorMessage = err instanceof Error ? err.message : 'Failed to send message';
             setError(errorMessage);
             console.error('Chat error:', err);
-
-            // Remove the user message on error (optional - could keep it and show retry)
-            // setMessages(prev => prev.filter(m => m.id !== userMessage.id));
         } finally {
             setIsLoading(false);
         }
-    }, [ensureSession]);
+    }, [ensureSession, refreshSessions]);
 
     /**
      * Start a new chat session
@@ -165,14 +249,24 @@ export function useChatAgent(): UseChatAgentReturn {
         hasInitializedRef.current = false;
     }, []);
 
+    // Load sessions on mount
+    useEffect(() => {
+        refreshSessions();
+    }, [refreshSessions]);
+
     return {
         messages,
         topic,
         sessionId,
         isLoading,
         error,
+        sessions,
+        isLoadingSessions,
         sendMessage,
         startNewChat,
+        loadSession,
+        deleteSession,
+        refreshSessions,
         hasMessages: messages.length > 0,
     };
 }

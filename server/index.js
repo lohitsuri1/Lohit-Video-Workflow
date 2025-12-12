@@ -457,13 +457,24 @@ app.get('/api/chat/sessions', async (req, res) => {
 // Delete a chat session
 app.delete('/api/chat/sessions/:id', async (req, res) => {
     try {
-        const deleted = chatAgent.deleteSession(req.params.id);
-        if (!deleted) {
-            return res.status(404).json({ error: "Session not found" });
-        }
+        chatAgent.deleteSession(req.params.id);
         res.json({ success: true });
     } catch (error) {
         console.error("Delete session error:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get full session data (for loading a specific chat)
+app.get('/api/chat/sessions/:id', async (req, res) => {
+    try {
+        const sessionData = chatAgent.getSessionData(req.params.id);
+        if (!sessionData) {
+            return res.status(404).json({ error: "Session not found" });
+        }
+        res.json(sessionData);
+    } catch (error) {
+        console.error("Get session error:", error);
         res.status(500).json({ error: error.message });
     }
 });
