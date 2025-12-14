@@ -22,8 +22,8 @@ import { HumanMessage, AIMessage } from "@langchain/core/messages";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const CHATS_DIR = path.join(__dirname, '..', '..', 'assets', 'chats');
-const IMAGES_DIR = path.join(__dirname, '..', '..', 'assets', 'images');
+const CHATS_DIR = path.join(__dirname, '..', '..', 'library', 'chats');
+const IMAGES_DIR = path.join(__dirname, '..', '..', 'library', 'images');
 
 // Ensure chats directory exists
 if (!fs.existsSync(CHATS_DIR)) {
@@ -32,7 +32,7 @@ if (!fs.existsSync(CHATS_DIR)) {
 
 /**
  * Resolve an image URL or base64 to a base64 data URL
- * Handles both file paths (/assets/images/...) and data URLs
+ * Handles both file paths (/library/images/...) and data URLs
  */
 function resolveImageToBase64(imageInput) {
     if (!imageInput) return null;
@@ -43,8 +43,8 @@ function resolveImageToBase64(imageInput) {
     }
 
     // File URL - read from disk
-    if (imageInput.startsWith('/assets/images/')) {
-        const filename = imageInput.replace('/assets/images/', '');
+    if (imageInput.startsWith('/library/images/')) {
+        const filename = imageInput.replace('/library/images/', '');
         const filePath = path.join(IMAGES_DIR, filename);
         if (fs.existsSync(filePath)) {
             const buffer = fs.readFileSync(filePath);

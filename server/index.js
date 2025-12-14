@@ -15,20 +15,22 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = 3001;
 
-// Ensure assets directories exist
-const WORKFLOWS_DIR = path.join(__dirname, '..', 'assets', 'workflows');
-const IMAGES_DIR = path.join(__dirname, '..', 'assets', 'images');
-const VIDEOS_DIR = path.join(__dirname, '..', 'assets', 'videos');
+// Ensure library directories exist
+const LIBRARY_DIR = path.join(__dirname, '..', 'library');
+const WORKFLOWS_DIR = path.join(LIBRARY_DIR, 'workflows');
+const IMAGES_DIR = path.join(LIBRARY_DIR, 'images');
+const VIDEOS_DIR = path.join(LIBRARY_DIR, 'videos');
+const CHATS_DIR = path.join(LIBRARY_DIR, 'chats');
+const LIBRARY_ASSETS_DIR = path.join(LIBRARY_DIR, 'assets');
 
-[WORKFLOWS_DIR, IMAGES_DIR, VIDEOS_DIR].forEach(dir => {
+[LIBRARY_DIR, WORKFLOWS_DIR, IMAGES_DIR, VIDEOS_DIR, CHATS_DIR, LIBRARY_ASSETS_DIR].forEach(dir => {
     if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
     }
 });
 
-// Serve static assets
-app.use('/assets/images', express.static(IMAGES_DIR));
-app.use('/assets/videos', express.static(VIDEOS_DIR));
+// Serve static assets from library
+app.use('/library', express.static(LIBRARY_DIR));
 
 app.use(cors());
 app.use(express.json({ limit: '100mb' }));
@@ -45,7 +47,7 @@ const getClient = () => {
 
 /**
  * Resolve an image URL or base64 to a base64 data URL
- * Handles both file paths (/assets/images/...) and data URLs
+ * Handles both file paths (/library/images/...) and data URLs
  */
 function resolveImageToBase64(imageInput) {
     if (!imageInput) return null;
@@ -56,15 +58,21 @@ function resolveImageToBase64(imageInput) {
     }
 
     // File URL - read from disk
+    // Supports older /assets/ paths (legacy) and new /library/ paths
+    let filePath = null;
     if (imageInput.startsWith('/assets/images/')) {
         const filename = imageInput.replace('/assets/images/', '');
-        const filePath = path.join(IMAGES_DIR, filename);
-        if (fs.existsSync(filePath)) {
-            const buffer = fs.readFileSync(filePath);
-            const ext = path.extname(filename).toLowerCase();
-            const mimeType = ext === '.png' ? 'image/png' : 'image/jpeg';
-            return `data:${mimeType};base64,${buffer.toString('base64')}`;
-        }
+        filePath = path.join(IMAGES_DIR, filename);
+    } else if (imageInput.startsWith('/library/images/')) {
+        const filename = imageInput.replace('/library/images/', '');
+        filePath = path.join(IMAGES_DIR, filename);
+    }
+
+    if (filePath && fs.existsSync(filePath)) {
+        const buffer = fs.readFileSync(filePath);
+        const ext = path.extname(filePath).toLowerCase();
+        const mimeType = ext === '.png' ? 'image/png' : 'image/jpeg';
+        return `data:${mimeType};base64,${buffer.toString('base64')}`;
     }
 
     // Return as-is if unknown format
@@ -89,6 +97,142 @@ const mapAspectRatio = (ratio) => {
         default: return "1:1";
     }
 };
+
+// --- Library Assets API ---
+
+// Save curated asset to library
+app.post('/api/library', async (req, res) => {
+    try {
+        const { sourceUrl, name, category, meta } = req.body;
+
+        if (!sourceUrl || !name || !category) {
+            return res.status(400).json({ error: "Missing required fields" });
+        }
+
+        // Determine destination directory
+        const destDir = path.join(LIBRARY_ASSETS_DIR, category);
+        if (!fs.existsSync(destDir)) {
+            fs.mkdirSync(destDir, { recursive: true });
+        }
+
+        // Sanitize name for filesystem
+        const safeName = name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+
+        let destFilename;
+        let destPath;
+
+        // HANDLE DATA URL (Base64)
+        if (sourceUrl.startsWith('data:')) {
+            const matches = sourceUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+            if (!matches || matches.length !== 3) {
+                return res.status(400).json({ error: 'Invalid data URL format' });
+            }
+
+            const mimeType = matches[1];
+            const base64Data = matches[2];
+            const buffer = Buffer.from(base64Data, 'base64');
+
+            // Determine extension from mime
+            let ext = '.png';
+            if (mimeType === 'image/jpeg') ext = '.jpg';
+            else if (mimeType === 'video/mp4') ext = '.mp4';
+            // Add more as needed
+
+            destFilename = `${safeName}${ext}`;
+            destPath = path.join(destDir, destFilename);
+
+            fs.writeFileSync(destPath, buffer);
+        }
+        // HANDLE FILE PATH OR URL
+        else {
+            // Determine source file path
+            let sourcePath = null;
+
+            // Normalize URL: remove origin if present to get just the path
+            let cleanUrl = sourceUrl;
+            try {
+                // If it's a full URL, extract pathname
+                if (sourceUrl.startsWith('http')) {
+                    const u = new URL(sourceUrl);
+                    cleanUrl = u.pathname;
+                }
+            } catch (e) {
+                // Not a valid URL, treat as path
+                cleanUrl = sourceUrl.split('?')[0];
+            }
+
+            // Ensure cleanUrl starts with / if it doesn't (though URL.pathname does)
+            if (!cleanUrl.startsWith('/')) cleanUrl = '/' + cleanUrl;
+
+            // Handle URL decoding (e.g. %20 -> space)
+            cleanUrl = decodeURIComponent(cleanUrl);
+
+            if (cleanUrl.startsWith('/library/images/')) {
+                sourcePath = path.join(IMAGES_DIR, cleanUrl.replace('/library/images/', ''));
+            } else if (cleanUrl.startsWith('/library/videos/')) {
+                sourcePath = path.join(VIDEOS_DIR, cleanUrl.replace('/library/videos/', ''));
+            } else if (cleanUrl.startsWith('/assets/images/')) { // Legacy support
+                sourcePath = path.join(IMAGES_DIR, cleanUrl.replace('/assets/images/', ''));
+            } else if (cleanUrl.startsWith('/assets/videos/')) { // Legacy support
+                sourcePath = path.join(VIDEOS_DIR, cleanUrl.replace('/assets/videos/', ''));
+            }
+
+            if (!sourcePath || !fs.existsSync(sourcePath)) {
+                console.error(`Save asset failed: Source file not found. URL: ${sourceUrl}, Path: ${sourcePath}`);
+                return res.status(404).json({ error: "Source file not found", debug: { sourceUrl, sourcePath, cleanUrl } });
+            }
+
+            // Copy file
+            const ext = path.extname(sourcePath);
+            destFilename = `${safeName}${ext}`;
+            destPath = path.join(destDir, destFilename);
+
+            fs.copyFileSync(sourcePath, destPath);
+        }
+
+        // Update library.json
+        const libraryJsonPath = path.join(LIBRARY_DIR, 'library.json');
+        let libraryData = [];
+        if (fs.existsSync(libraryJsonPath)) {
+            libraryData = JSON.parse(fs.readFileSync(libraryJsonPath, 'utf8'));
+        }
+
+        const newEntry = {
+            id: crypto.randomUUID(),
+            name: name,
+            category: category,
+            url: `/library/assets/${category}/${destFilename}`,
+            type: sourceUrl.includes('video') || (sourceUrl.startsWith('data:video')) ? 'video' : 'image',
+            createdAt: new Date().toISOString(),
+            ...meta
+        };
+
+        libraryData.push(newEntry);
+        fs.writeFileSync(libraryJsonPath, JSON.stringify(libraryData, null, 2));
+
+        res.json({ success: true, asset: newEntry });
+    } catch (error) {
+        console.error("Save to library error:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// List library assets
+app.get('/api/library', async (req, res) => {
+    try {
+        const libraryJsonPath = path.join(LIBRARY_DIR, 'library.json');
+        if (!fs.existsSync(libraryJsonPath)) {
+            return res.json([]);
+        }
+        const libraryData = JSON.parse(fs.readFileSync(libraryJsonPath, 'utf8'));
+        // Sort newest first
+        libraryData.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        res.json(libraryData);
+    } catch (error) {
+        console.error("List library error:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
 
 // --- Workflow API Routes ---
 
@@ -262,7 +406,8 @@ app.post('/api/generate-image', async (req, res) => {
                     fs.writeFileSync(imagePath, imageBuffer);
 
                     // Return URL to the saved file
-                    const imageUrl = `/assets/images/${imageId}.png`;
+                    // Use new library path
+                    const imageUrl = `/library/images/${imageId}.png`;
 
                     // SAVE METADATA (Required for History)
                     const metadata = {
@@ -383,7 +528,7 @@ app.post('/api/generate-video', async (req, res) => {
         fs.writeFileSync(videoPath, buffer);
 
         // Return URL to the saved file
-        const videoUrl = `/assets/videos/${videoId}.mp4`;
+        const videoUrl = `/library/videos/${videoId}.mp4`;
 
         // SAVE METADATA (Required for History)
         const metadata = {
@@ -439,7 +584,7 @@ app.post('/api/assets/:type', async (req, res) => {
         };
         fs.writeFileSync(path.join(targetDir, metaFilename), JSON.stringify(metadata, null, 2));
 
-        res.json({ success: true, id, filename, url: `/assets/${type}/${filename}` });
+        res.json({ success: true, id, filename, url: `/library/${type}/${filename}` });
     } catch (error) {
         console.error('Save asset error:', error);
         res.status(500).json({ error: error.message });
@@ -469,7 +614,7 @@ app.get('/api/assets/:type', async (req, res) => {
                 try {
                     const content = fs.readFileSync(path.join(targetDir, file), 'utf8');
                     const metadata = JSON.parse(content);
-                    metadata.url = `/assets/${type}/${metadata.filename}`;
+                    metadata.url = `/library/${type}/${metadata.filename}`;
                     assets.push(metadata);
                 } catch (e) {
                     // Skip invalid JSON files

@@ -31,6 +31,8 @@ import { WorkflowPanel } from './components/WorkflowPanel';
 import { HistoryPanel } from './components/HistoryPanel';
 import { ChatPanel, ChatBubble } from './components/ChatPanel';
 import { ImageEditorModal } from './components/modals/ImageEditorModal';
+import { CreateAssetModal } from './components/modals/CreateAssetModal';
+import { AssetLibraryPanel } from './components/AssetLibraryPanel';
 
 // ============================================================================
 // MAIN COMPONENT
@@ -67,6 +69,9 @@ export default function App() {
     y: 0,
     type: 'global'
   });
+
+  const [isAssetLibraryOpen, setIsAssetLibraryOpen] = useState(false);
+  const [assetLibraryY, setAssetLibraryY] = useState(0);
 
 
   // Canvas title state (via hook)
@@ -179,7 +184,10 @@ export default function App() {
     setSelectedNodeIds,
     setCanvasTitle,
     setEditingTitleValue,
-    onPanelOpen: () => setIsHistoryPanelOpen(false) // Close history when workflow opens
+    onPanelOpen: () => {
+      setIsHistoryPanelOpen(false);
+      setIsAssetLibraryOpen(false);
+    }
   });
 
   // Simple dirty flag for unsaved changes tracking
@@ -236,6 +244,7 @@ export default function App() {
     setHistoryPanelY(rect.top);
     setIsHistoryPanelOpen(prev => !prev);
     closeWorkflowPanel(); // Close workflow panel when opening history
+    closeAssetLibrary();
   };
 
   const closeHistoryPanel = () => {
@@ -301,6 +310,75 @@ export default function App() {
 
     setNodes(prev => [...prev, newNode]);
     closeHistoryPanel();
+    closeAssetLibrary();
+  };
+
+  // ============================================================================
+  // ASSET LIBRARY Logic
+  // ============================================================================
+
+
+
+  const handleAssetsClick = (e: React.MouseEvent) => {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setAssetLibraryY(rect.top);
+    setIsAssetLibraryOpen(prev => !prev);
+    closeHistoryPanel();
+    closeWorkflowPanel();
+    closeChat();
+  };
+
+  const closeAssetLibrary = () => setIsAssetLibraryOpen(false);
+
+  const handleLibrarySelect = (url: string, type: 'image' | 'video') => {
+    // Reuse logic - same as history select but generalized if needed
+    // For now just call handleSelectAsset as it does what we want (add node)
+    handleSelectAsset(type === 'image' ? 'images' : 'videos', url, 'Asset Library Item');
+    closeAssetLibrary();
+  };
+
+
+  // ============================================================================
+  // CREATE ASSET MODAL Logic
+  // ============================================================================
+  const [isCreateAssetModalOpen, setIsCreateAssetModalOpen] = useState(false);
+  const [nodeToSnapshot, setNodeToSnapshot] = useState<NodeData | null>(null);
+
+  const handleOpenCreateAsset = (nodeId: string) => {
+    const node = nodes.find(n => n.id === nodeId);
+    if (node && (node.type === NodeType.IMAGE || node.type === NodeType.VIDEO)) {
+      setNodeToSnapshot(node);
+      setIsCreateAssetModalOpen(true);
+    } else {
+      alert("Please select an Image or Video node to create an asset.");
+    }
+  };
+
+  const handleSaveAssetToLibrary = async (name: string, category: string) => {
+    if (!nodeToSnapshot?.resultUrl) return;
+
+    try {
+      // Determine type based on node
+      // We send sourceUrl to server, server handles copy
+      const response = await fetch('http://localhost:3001/api/library', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sourceUrl: nodeToSnapshot.resultUrl,
+          name: name,
+          category: category
+        })
+      });
+
+      if (!response.ok) throw new Error('Failed to save');
+      // Success is handled by the modal's internal state via promise resolution if we want, 
+      // or we can close it here. But to make it pretty, let's allow the modal to show "Saved".
+      // return true; 
+    } catch (error) {
+      console.error("Failed to save asset:", error);
+      // alert("Failed to save asset."); // improving this too
+      throw error;
+    }
   };
 
   // ============================================================================
@@ -554,6 +632,7 @@ export default function App() {
         setContextMenu(prev => ({ ...prev, isOpen: false }));
         closeWorkflowPanel();
         closeHistoryPanel();
+        closeAssetLibrary();
       }
       // Middle-click (button 1) or other: Start panning
       else {
@@ -675,6 +754,13 @@ export default function App() {
       type: 'node-options',
       sourceNodeId: id
     });
+  };
+
+  // Wrapper for Context Menu to call our handler
+  const handleContextMenuCreateAsset = () => {
+    if (contextMenu.sourceNodeId) {
+      handleOpenCreateAsset(contextMenu.sourceNodeId);
+    }
   };
 
   const handleContextMenuSelect = (type: NodeType | 'DELETE') => {
@@ -826,6 +912,7 @@ export default function App() {
         onAddClick={handleToolbarAdd}
         onWorkflowsClick={handleWorkflowsClick}
         onHistoryClick={handleHistoryClick}
+        onAssetsClick={handleAssetsClick}
       />
 
       {/* Workflow Panel */}
@@ -843,6 +930,20 @@ export default function App() {
         onClose={closeHistoryPanel}
         onSelectAsset={handleSelectAsset}
         panelY={historyPanelY}
+      />
+
+      <AssetLibraryPanel
+        isOpen={isAssetLibraryOpen}
+        onClose={closeAssetLibrary}
+        onSelectAsset={handleLibrarySelect}
+        panelY={assetLibraryY}
+      />
+
+      <CreateAssetModal
+        isOpen={isCreateAssetModalOpen}
+        onClose={() => setIsCreateAssetModalOpen(false)}
+        nodeToSnapshot={nodeToSnapshot}
+        onSave={handleSaveAssetToLibrary}
       />
 
       {/* Agent Chat */}
@@ -1045,6 +1146,7 @@ export default function App() {
         onPaste={handlePaste}
         onCopy={handleCopy}
         onDuplicate={handleDuplicate}
+        onCreateAsset={handleContextMenuCreateAsset}
         canUndo={canUndo}
         canRedo={canRedo}
       />

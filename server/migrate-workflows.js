@@ -14,9 +14,9 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const WORKFLOWS_DIR = path.join(__dirname, '..', 'assets', 'workflows');
-const IMAGES_DIR = path.join(__dirname, '..', 'assets', 'images');
-const VIDEOS_DIR = path.join(__dirname, '..', 'assets', 'videos');
+const WORKFLOWS_DIR = path.join(__dirname, '..', 'library', 'workflows');
+const IMAGES_DIR = path.join(__dirname, '..', 'library', 'images');
+const VIDEOS_DIR = path.join(__dirname, '..', 'library', 'videos');
 
 // Ensure directories exist
 [IMAGES_DIR, VIDEOS_DIR].forEach(dir => {
@@ -27,6 +27,7 @@ const VIDEOS_DIR = path.join(__dirname, '..', 'assets', 'videos');
 
 let stats = {
     workflowsProcessed: 0,
+    pathsUpdated: 0,
     imagesConverted: 0,
     videosConverted: 0,
     bytesFreed: 0
@@ -37,7 +38,17 @@ let stats = {
  * @returns {string} File URL or original value if not base64
  */
 function convertBase64ToFile(dataUrl, type) {
+    // ... existing Base64 logic if needed, but primary goal is path update ...
     if (!dataUrl || typeof dataUrl !== 'string') return dataUrl;
+
+    if (dataUrl.startsWith('/assets/')) {
+        stats.pathsUpdated++;
+        return dataUrl.replace('/assets/', '/library/');
+    }
+
+    // ... (keep base64 logic just in case, or simplify if we trust base64 is gone)
+    // For safety, let's keep base64 logic but wrapped properly or just focus on path swap if that's the user's issue.
+    // Given the user specifically "moved medias", base64 might not be the issue anymore, but keeping it is safe.
 
     // Check if it's a base64 data URL
     const imageMatch = dataUrl.match(/^data:image\/(png|jpeg|jpg|webp);base64,(.+)$/);
@@ -56,7 +67,7 @@ function convertBase64ToFile(dataUrl, type) {
             stats.imagesConverted++;
             stats.bytesFreed += dataUrl.length;
             console.log(`  ✓ Saved image: ${filename} (${(buffer.length / 1024).toFixed(1)} KB)`);
-            return `/assets/images/${filename}`;
+            return `/library/images/${filename}`;
         } catch (err) {
             console.error(`  ✗ Failed to save image: ${err.message}`);
             return dataUrl;
@@ -76,7 +87,7 @@ function convertBase64ToFile(dataUrl, type) {
             stats.videosConverted++;
             stats.bytesFreed += dataUrl.length;
             console.log(`  ✓ Saved video: ${filename} (${(buffer.length / 1024 / 1024).toFixed(2)} MB)`);
-            return `/assets/videos/${filename}`;
+            return `/library/videos/${filename}`;
         } catch (err) {
             console.error(`  ✗ Failed to save video: ${err.message}`);
             return dataUrl;
@@ -99,11 +110,18 @@ function processWorkflow(workflowPath) {
 
         let modified = false;
 
+        // Process coverUrl
+        if (workflow.coverUrl && workflow.coverUrl.includes('/assets/')) {
+            workflow.coverUrl = workflow.coverUrl.replace('/assets/', '/library/');
+            modified = true;
+            stats.pathsUpdated++;
+        }
+
         // Process each node
         if (workflow.nodes && Array.isArray(workflow.nodes)) {
             for (const node of workflow.nodes) {
-                // Convert resultUrl
-                if (node.resultUrl && node.resultUrl.startsWith('data:')) {
+                // Convert resultUrl (Base64 OR Path update)
+                if (node.resultUrl) {
                     const newUrl = convertBase64ToFile(node.resultUrl, node.type);
                     if (newUrl !== node.resultUrl) {
                         node.resultUrl = newUrl;
@@ -112,7 +130,7 @@ function processWorkflow(workflowPath) {
                 }
 
                 // Convert lastFrame (video nodes)
-                if (node.lastFrame && node.lastFrame.startsWith('data:')) {
+                if (node.lastFrame) {
                     const newUrl = convertBase64ToFile(node.lastFrame, 'image');
                     if (newUrl !== node.lastFrame) {
                         node.lastFrame = newUrl;
@@ -127,7 +145,7 @@ function processWorkflow(workflowPath) {
             fs.writeFileSync(workflowPath, JSON.stringify(workflow, null, 2));
             console.log(`  → Workflow updated`);
         } else {
-            console.log(`  → No base64 data found (already migrated or empty)`);
+            console.log(`  → No changes needed`);
         }
 
         stats.workflowsProcessed++;

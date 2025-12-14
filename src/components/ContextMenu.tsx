@@ -29,6 +29,7 @@ interface ContextMenuProps {
   onPaste?: () => void;
   onCopy?: () => void;
   onDuplicate?: () => void;
+  onCreateAsset?: () => void;
   canUndo?: boolean;
   canRedo?: boolean;
 }
@@ -43,6 +44,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   onPaste,
   onCopy,
   onDuplicate,
+  onCreateAsset,
   canUndo = false,
   canRedo = false
 }) => {
@@ -123,7 +125,12 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
           <MenuItem
             icon={<ImageIcon size={16} />}
             label="Create Asset"
-            onClick={() => { }} // Logic to be implemented or connected to generate
+            onClick={() => {
+              if (onCreateAsset) {
+                onCreateAsset();
+                onClose();
+              }
+            }}
             active={false}
           />
           <div className="my-1 border-t border-neutral-800 mx-1" />

@@ -13,9 +13,15 @@ interface ToolbarProps {
   onAddClick?: (e: React.MouseEvent) => void;
   onWorkflowsClick?: (e: React.MouseEvent) => void;
   onHistoryClick?: (e: React.MouseEvent) => void;
+  onAssetsClick?: (e: React.MouseEvent) => void;
 }
 
-export const Toolbar: React.FC<ToolbarProps> = ({ onAddClick, onWorkflowsClick, onHistoryClick }) => {
+export const Toolbar: React.FC<ToolbarProps> = ({
+  onAddClick,
+  onWorkflowsClick,
+  onHistoryClick,
+  onAssetsClick
+}) => {
   return (
     <div className="fixed left-4 top-1/2 -translate-y-1/2 flex flex-col items-center gap-2 p-1 bg-[#1a1a1a] border border-neutral-800 rounded-full shadow-2xl z-50">
       <button
@@ -33,7 +39,11 @@ export const Toolbar: React.FC<ToolbarProps> = ({ onAddClick, onWorkflowsClick, 
         >
           <LayoutGrid size={20} />
         </button>
-        <button className="text-neutral-400 hover:text-white hover:scale-125 transition-all duration-200" title="Assets">
+        <button
+          className="text-neutral-400 hover:text-white hover:scale-125 transition-all duration-200"
+          title="Assets"
+          onClick={onAssetsClick}
+        >
           <ImageIcon size={20} />
         </button>
         <button
