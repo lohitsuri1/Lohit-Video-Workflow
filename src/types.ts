@@ -36,9 +36,11 @@ export interface NodeData {
   // Video node specific
   videoMode?: 'standard' | 'frame-to-frame'; // Video generation mode
   frameInputs?: { nodeId: string; order: 'start' | 'end' }[]; // For frame-to-frame: connected image nodes
+  videoModel?: string; // Video model version (e.g., 'veo-3.1', 'kling-v2-1')
 
   // Settings
   model: string;
+  imageModel?: string; // Image model version (e.g., 'gemini-pro', 'kling-v2')
   aspectRatio: string;
   resolution: string;
 }

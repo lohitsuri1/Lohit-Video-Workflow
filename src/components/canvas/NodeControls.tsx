@@ -29,6 +29,28 @@ const VIDEO_RESOLUTIONS = [
     "Auto", "1080p", "512p"
 ];
 
+// Video model versions with metadata
+const VIDEO_MODELS = [
+    { id: 'veo-3.1', name: 'Veo 3.1', provider: 'google', supportsMultiImage: true },
+    { id: 'kling-v1', name: 'Kling V1', provider: 'kling', supportsMultiImage: false },
+    { id: 'kling-v1-5', name: 'Kling V1.5', provider: 'kling', supportsMultiImage: false },
+    { id: 'kling-v1-6', name: 'Kling V1.6', provider: 'kling', supportsMultiImage: true },
+    { id: 'kling-v2-master', name: 'Kling V2 Master', provider: 'kling', supportsMultiImage: false },
+    { id: 'kling-v2-1', name: 'Kling V2.1', provider: 'kling', supportsMultiImage: false, recommended: true },
+    { id: 'kling-v2-1-master', name: 'Kling V2.1 Master', provider: 'kling', supportsMultiImage: false },
+    { id: 'kling-v2-5-turbo', name: 'Kling V2.5 Turbo', provider: 'kling', supportsMultiImage: false },
+];
+
+// Image model versions with metadata
+const IMAGE_MODELS = [
+    { id: 'gemini-pro', name: 'Gemini Pro', provider: 'google' },
+    { id: 'kling-v1', name: 'Kling V1', provider: 'kling' },
+    { id: 'kling-v1-5', name: 'Kling V1.5', provider: 'kling' },
+    { id: 'kling-v2', name: 'Kling V2', provider: 'kling' },
+    { id: 'kling-v2-new', name: 'Kling V2 New', provider: 'kling' },
+    { id: 'kling-v2-1', name: 'Kling V2.1', provider: 'kling', recommended: true },
+];
+
 const NodeControlsComponent: React.FC<NodeControlsProps> = ({
     data,
     inputUrl,
@@ -41,9 +63,11 @@ const NodeControlsComponent: React.FC<NodeControlsProps> = ({
 }) => {
     const [showAdvanced, setShowAdvanced] = useState(false);
     const [showSizeDropdown, setShowSizeDropdown] = useState(false);
+    const [showModelDropdown, setShowModelDropdown] = useState(false);
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
     const [localPrompt, setLocalPrompt] = useState(data.prompt || '');
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const modelDropdownRef = useRef<HTMLDivElement>(null);
     const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const lastSentPromptRef = useRef<string | undefined>(data.prompt); // Track what we sent
 
@@ -51,6 +75,9 @@ const NodeControlsComponent: React.FC<NodeControlsProps> = ({
         const handleClickOutside = (event: MouseEvent) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
                 setShowSizeDropdown(false);
+            }
+            if (modelDropdownRef.current && !modelDropdownRef.current.contains(event.target as Node)) {
+                setShowModelDropdown(false);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
@@ -134,6 +161,28 @@ const NodeControlsComponent: React.FC<NodeControlsProps> = ({
     const isVideoNode = data.type === NodeType.VIDEO;
     const hasConnectedImages = connectedImageNodes.length > 0;
 
+    // Video model selection logic
+    const currentVideoModel = VIDEO_MODELS.find(m => m.id === data.videoModel) || VIDEO_MODELS[0];
+    const isFrameToFrame = data.videoMode === 'frame-to-frame';
+
+    // Filter models based on mode - only show multi-image capable models for frame-to-frame
+    const availableVideoModels = isFrameToFrame
+        ? VIDEO_MODELS.filter(m => m.supportsMultiImage)
+        : VIDEO_MODELS;
+
+    const handleVideoModelChange = (modelId: string) => {
+        onUpdate(data.id, { videoModel: modelId });
+        setShowModelDropdown(false);
+    };
+
+    // Image model selection logic
+    const currentImageModel = IMAGE_MODELS.find(m => m.id === data.imageModel) || IMAGE_MODELS[0];
+
+    const handleImageModelChange = (modelId: string) => {
+        onUpdate(data.id, { imageModel: modelId });
+        setShowModelDropdown(false);
+    };
+
     // Get frame inputs with their image URLs
     const frameInputsWithUrls = (data.frameInputs || []).map(input => {
         const node = connectedImageNodes.find(n => n.id === input.nodeId);
@@ -148,7 +197,13 @@ const NodeControlsComponent: React.FC<NodeControlsProps> = ({
         >
             <textarea
                 className="w-full bg-transparent text-sm text-white placeholder-neutral-600 outline-none resize-none mb-3 font-light"
-                placeholder={data.type === NodeType.VIDEO && inputUrl ? "Describe how to animate this frame..." : "Describe what you want to generate..."}
+                placeholder={
+                    data.type === NodeType.VIDEO && isFrameToFrame && currentVideoModel.provider === 'kling'
+                        ? "Prompt optional for Kling frame-to-frame..."
+                        : data.type === NodeType.VIDEO && inputUrl
+                            ? "Describe how to animate this frame..."
+                            : "Describe what you want to generate..."
+                }
                 rows={2}
                 value={localPrompt}
                 onChange={(e) => handlePromptChange(e.target.value)}
@@ -172,14 +227,130 @@ const NodeControlsComponent: React.FC<NodeControlsProps> = ({
             {/* Controls */}
             <div className="flex items-center justify-between relative">
                 <div className="flex items-center gap-2">
-                    {/* Model Selector */}
-                    <button className="flex items-center gap-1.5 text-xs text-neutral-300 hover:bg-neutral-800 px-2 py-1.5 rounded-lg transition-colors">
-                        <Banana size={12} className="text-yellow-400" />
-                        <span className="font-medium">
-                            {data.type === NodeType.VIDEO ? "Veo 3.1" : "Banana Pro"}
-                        </span>
-                        <Settings2 size={12} className="ml-1 opacity-50" />
-                    </button>
+                    {/* Model Selector - Image nodes use static display, Video nodes get dropdown */}
+                    {data.type === NodeType.VIDEO ? (
+                        <div className="relative" ref={modelDropdownRef}>
+                            <button
+                                onClick={() => setShowModelDropdown(!showModelDropdown)}
+                                className="flex items-center gap-1.5 text-xs text-neutral-300 hover:bg-neutral-800 px-2 py-1.5 rounded-lg transition-colors"
+                            >
+                                {currentVideoModel.provider === 'google' ? (
+                                    <Banana size={12} className="text-yellow-400" />
+                                ) : (
+                                    <Film size={12} className="text-cyan-400" />
+                                )}
+                                <span className="font-medium">{currentVideoModel.name}</span>
+                                <ChevronDown size={12} className="ml-0.5 opacity-50" />
+                            </button>
+
+                            {/* Model Dropdown Menu */}
+                            {showModelDropdown && (
+                                <div className="absolute top-full mt-1 left-0 w-48 bg-[#252525] border border-neutral-700 rounded-lg shadow-xl overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-100">
+                                    {/* Google Models */}
+                                    <div className="px-3 py-1.5 text-[10px] font-bold text-neutral-500 uppercase tracking-wider bg-[#1f1f1f]">
+                                        Google
+                                    </div>
+                                    {availableVideoModels.filter(m => m.provider === 'google').map(model => (
+                                        <button
+                                            key={model.id}
+                                            onClick={() => handleVideoModelChange(model.id)}
+                                            className={`w-full flex items-center justify-between px-3 py-2 text-xs text-left hover:bg-[#333] transition-colors ${currentVideoModel.id === model.id ? 'text-blue-400' : 'text-neutral-300'
+                                                }`}
+                                        >
+                                            <span className="flex items-center gap-2">
+                                                <Banana size={12} className="text-yellow-400" />
+                                                {model.name}
+                                            </span>
+                                            {currentVideoModel.id === model.id && <Check size={12} />}
+                                        </button>
+                                    ))}
+
+                                    {/* Kling Models */}
+                                    <div className="px-3 py-1.5 text-[10px] font-bold text-neutral-500 uppercase tracking-wider bg-[#1f1f1f] border-t border-neutral-700">
+                                        Kling AI
+                                    </div>
+                                    {availableVideoModels.filter(m => m.provider === 'kling').map(model => (
+                                        <button
+                                            key={model.id}
+                                            onClick={() => handleVideoModelChange(model.id)}
+                                            className={`w-full flex items-center justify-between px-3 py-2 text-xs text-left hover:bg-[#333] transition-colors ${currentVideoModel.id === model.id ? 'text-blue-400' : 'text-neutral-300'
+                                                }`}
+                                        >
+                                            <span className="flex items-center gap-2">
+                                                <Film size={12} className="text-cyan-400" />
+                                                {model.name}
+                                                {(model as any).recommended && (
+                                                    <span className="text-[9px] px-1 py-0.5 bg-green-600/30 text-green-400 rounded">REC</span>
+                                                )}
+                                            </span>
+                                            {currentVideoModel.id === model.id && <Check size={12} />}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="relative" ref={modelDropdownRef}>
+                            <button
+                                onClick={() => setShowModelDropdown(!showModelDropdown)}
+                                className="flex items-center gap-1.5 text-xs text-neutral-300 hover:bg-neutral-800 px-2 py-1.5 rounded-lg transition-colors"
+                            >
+                                {currentImageModel.provider === 'google' ? (
+                                    <Banana size={12} className="text-yellow-400" />
+                                ) : (
+                                    <ImageIcon size={12} className="text-cyan-400" />
+                                )}
+                                <span className="font-medium">{currentImageModel.name}</span>
+                                <ChevronDown size={12} className="ml-0.5 opacity-50" />
+                            </button>
+
+                            {/* Image Model Dropdown Menu */}
+                            {showModelDropdown && (
+                                <div className="absolute top-full mt-1 left-0 w-44 bg-[#252525] border border-neutral-700 rounded-lg shadow-xl overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-100">
+                                    {/* Google Models */}
+                                    <div className="px-3 py-1.5 text-[10px] font-bold text-neutral-500 uppercase tracking-wider bg-[#1f1f1f]">
+                                        Google
+                                    </div>
+                                    {IMAGE_MODELS.filter(m => m.provider === 'google').map(model => (
+                                        <button
+                                            key={model.id}
+                                            onClick={() => handleImageModelChange(model.id)}
+                                            className={`w-full flex items-center justify-between px-3 py-2 text-xs text-left hover:bg-[#333] transition-colors ${currentImageModel.id === model.id ? 'text-blue-400' : 'text-neutral-300'
+                                                }`}
+                                        >
+                                            <span className="flex items-center gap-2">
+                                                <Banana size={12} className="text-yellow-400" />
+                                                {model.name}
+                                            </span>
+                                            {currentImageModel.id === model.id && <Check size={12} />}
+                                        </button>
+                                    ))}
+
+                                    {/* Kling Models */}
+                                    <div className="px-3 py-1.5 text-[10px] font-bold text-neutral-500 uppercase tracking-wider bg-[#1f1f1f] border-t border-neutral-700">
+                                        Kling AI
+                                    </div>
+                                    {IMAGE_MODELS.filter(m => m.provider === 'kling').map(model => (
+                                        <button
+                                            key={model.id}
+                                            onClick={() => handleImageModelChange(model.id)}
+                                            className={`w-full flex items-center justify-between px-3 py-2 text-xs text-left hover:bg-[#333] transition-colors ${currentImageModel.id === model.id ? 'text-blue-400' : 'text-neutral-300'
+                                                }`}
+                                        >
+                                            <span className="flex items-center gap-2">
+                                                <ImageIcon size={12} className="text-cyan-400" />
+                                                {model.name}
+                                                {(model as any).recommended && (
+                                                    <span className="text-[9px] px-1 py-0.5 bg-green-600/30 text-green-400 rounded">REC</span>
+                                                )}
+                                            </span>
+                                            {currentImageModel.id === model.id && <Check size={12} />}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 <div className="flex items-center gap-2">

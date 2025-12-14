@@ -33,7 +33,18 @@ export const useGeneration = ({ nodes, updateNode }: UseGenerationProps) => {
      */
     const handleGenerate = async (id: string) => {
         const node = nodes.find(n => n.id === id);
-        if (!node || !node.prompt) return;
+        if (!node) return;
+
+        // Check if prompt is required
+        // For Kling frame-to-frame with both start and end frames, prompt is optional
+        const isKlingFrameToFrame =
+            node.type === NodeType.VIDEO &&
+            node.videoModel?.startsWith('kling-') &&
+            node.videoMode === 'frame-to-frame' &&
+            node.frameInputs &&
+            node.frameInputs.length >= 2;
+
+        if (!node.prompt && !isKlingFrameToFrame) return;
 
         updateNode(id, { status: NodeStatus.LOADING });
 
@@ -66,7 +77,8 @@ export const useGeneration = ({ nodes, updateNode }: UseGenerationProps) => {
                     prompt: node.prompt,
                     aspectRatio: node.aspectRatio,
                     resolution: node.resolution,
-                    imageBase64: imageBase64s.length > 0 ? imageBase64s : undefined
+                    imageBase64: imageBase64s.length > 0 ? imageBase64s : undefined,
+                    imageModel: node.imageModel
                 });
                 updateNode(id, { status: NodeStatus.SUCCESS, resultUrl, errorMessage: undefined });
 
@@ -115,7 +127,8 @@ export const useGeneration = ({ nodes, updateNode }: UseGenerationProps) => {
                     imageBase64,
                     lastFrameBase64,
                     aspectRatio: node.aspectRatio,
-                    resolution: node.resolution
+                    resolution: node.resolution,
+                    videoModel: node.videoModel
                 });
 
                 // Extract last frame for chaining

@@ -5,6 +5,7 @@ import { GoogleGenAI } from '@google/genai';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import crypto from 'crypto';
 import chatAgent from './agent/index.js';
 
 dotenv.config();
@@ -44,6 +45,61 @@ if (!API_KEY) {
 const getClient = () => {
     return new GoogleGenAI({ apiKey: API_KEY || '' });
 };
+
+// ============================================================================
+// KLING AI CONFIGURATION
+// ============================================================================
+
+const KLING_ACCESS_KEY = process.env.KLING_ACCESS_KEY;
+const KLING_SECRET_KEY = process.env.KLING_SECRET_KEY;
+const KLING_BASE_URL = 'https://api-singapore.klingai.com';
+
+if (!KLING_ACCESS_KEY || !KLING_SECRET_KEY) {
+    console.warn("SERVER WARNING: KLING_ACCESS_KEY or KLING_SECRET_KEY not set. Kling AI models will not work.");
+}
+
+/**
+ * Generate JWT token for Kling AI API authentication
+ * Token is valid for 30 minutes
+ */
+function generateKlingJWT() {
+    if (!KLING_ACCESS_KEY || !KLING_SECRET_KEY) {
+        throw new Error('Kling API credentials not configured');
+    }
+
+    const header = {
+        alg: 'HS256',
+        typ: 'JWT'
+    };
+
+    const now = Math.floor(Date.now() / 1000);
+    const payload = {
+        iss: KLING_ACCESS_KEY,
+        exp: now + 1800, // 30 minutes
+        nbf: now - 5     // Valid from 5 seconds ago to handle clock skew
+    };
+
+    // Base64url encode
+    const base64UrlEncode = (obj) => {
+        const json = JSON.stringify(obj);
+        const base64 = Buffer.from(json).toString('base64');
+        return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    };
+
+    const headerEncoded = base64UrlEncode(header);
+    const payloadEncoded = base64UrlEncode(payload);
+    const signatureInput = `${headerEncoded}.${payloadEncoded}`;
+
+    // HMAC-SHA256 signature
+    const signature = crypto.createHmac('sha256', KLING_SECRET_KEY)
+        .update(signatureInput)
+        .digest('base64')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=/g, '');
+
+    return `${headerEncoded}.${payloadEncoded}.${signature}`;
+}
 
 /**
  * Resolve an image URL or base64 to a base64 data URL
@@ -97,6 +153,309 @@ const mapAspectRatio = (ratio) => {
         default: return "1:1";
     }
 };
+
+// ============================================================================
+// KLING AI VIDEO GENERATION HELPERS
+// ============================================================================
+
+/**
+ * Map frontend model ID to Kling API model_name
+ */
+function mapKlingModelName(modelId) {
+    const mapping = {
+        'kling-v1': 'kling-v1',
+        'kling-v1-5': 'kling-v1-5',
+        'kling-v1-6': 'kling-v1-6',
+        'kling-v2-master': 'kling-v2-master',
+        'kling-v2-1': 'kling-v2-1',
+        'kling-v2-1-master': 'kling-v2-1-master',
+        'kling-v2-5-turbo': 'kling-v2-5-turbo'
+    };
+    return mapping[modelId] || 'kling-v2-1';
+}
+
+/**
+ * Extract raw base64 from data URL (removes data:image/xxx;base64, prefix)
+ */
+function extractRawBase64(dataUrl) {
+    if (!dataUrl) return null;
+    if (dataUrl.startsWith('data:')) {
+        return dataUrl.replace(/^data:[^;]+;base64,/, '');
+    }
+    return dataUrl;
+}
+
+/**
+ * Poll Kling task status until complete
+ * @param {string} taskId - Task ID from create task response
+ * @param {string} endpoint - API endpoint (image2video or multi-image2video)
+ * @param {number} maxWaitMs - Maximum wait time in milliseconds
+ */
+async function pollKlingTask(taskId, endpoint, maxWaitMs = 300000) {
+    const token = generateKlingJWT();
+    const startTime = Date.now();
+    const pollInterval = 5000; // 5 seconds
+
+    while (Date.now() - startTime < maxWaitMs) {
+        const response = await fetch(`${KLING_BASE_URL}/v1/videos/${endpoint}/${taskId}`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        const result = await response.json();
+
+        if (result.code !== 0) {
+            throw new Error(`Kling API error: ${result.message || 'Unknown error'}`);
+        }
+
+        const status = result.data?.task_status;
+        console.log(`Kling task ${taskId} status: ${status}`);
+
+        if (status === 'succeed') {
+            const videoUrl = result.data?.task_result?.videos?.[0]?.url;
+            if (!videoUrl) {
+                throw new Error('No video URL in successful response');
+            }
+            return videoUrl;
+        } else if (status === 'failed') {
+            throw new Error(`Kling generation failed: ${result.data?.task_status_msg || 'Unknown error'}`);
+        }
+
+        // Wait before next poll
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
+    }
+
+    throw new Error('Kling generation timed out');
+}
+
+/**
+ * Generate video using Kling AI Image-to-Video API
+ */
+async function generateKlingVideo({ prompt, imageBase64, lastFrameBase64, modelId, aspectRatio }) {
+    const token = generateKlingJWT();
+    const modelName = mapKlingModelName(modelId);
+
+    // Use 'pro' mode when doing frame-to-frame (with end frame), otherwise 'std'
+    const useProMode = !!lastFrameBase64;
+
+    // Prepare request body
+    const body = {
+        model_name: modelName,
+        mode: useProMode ? 'pro' : 'std', // Pro mode required for frame-to-frame with image_tail
+        duration: '5',
+        prompt: prompt || ''
+    };
+
+    // Add start frame image
+    if (imageBase64) {
+        const rawBase64 = extractRawBase64(imageBase64);
+        body.image = rawBase64;
+    }
+
+    // Add end frame image (requires pro mode for most models)
+    if (lastFrameBase64) {
+        const rawBase64 = extractRawBase64(lastFrameBase64);
+        body.image_tail = rawBase64;
+    }
+
+    console.log(`Kling Video Gen: Using model ${modelName}, mode: ${body.mode}, has image: ${!!imageBase64}, has tail: ${!!lastFrameBase64}`);
+
+    // Create task
+    const response = await fetch(`${KLING_BASE_URL}/v1/videos/image2video`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(body)
+    });
+
+    const result = await response.json();
+
+    if (result.code !== 0) {
+        throw new Error(`Kling API error: ${result.message || 'Failed to create task'}`);
+    }
+
+    const taskId = result.data?.task_id;
+    if (!taskId) {
+        throw new Error('No task ID returned from Kling API');
+    }
+
+    console.log(`Kling task created: ${taskId}`);
+
+    // Poll for completion
+    return await pollKlingTask(taskId, 'image2video');
+}
+
+/**
+ * Generate video using Kling AI Multi-Image-to-Video API (for frame-to-frame)
+ */
+async function generateKlingMultiImageVideo({ prompt, imageList, aspectRatio }) {
+    const token = generateKlingJWT();
+
+    // Multi-image only supports kling-v1-6
+    const body = {
+        model_name: 'kling-v1-6',
+        mode: 'std',
+        duration: '5',
+        prompt: prompt || '',
+        aspect_ratio: aspectRatio === '9:16' ? '9:16' : '16:9',
+        image_list: imageList.map(img => ({ image: extractRawBase64(img) }))
+    };
+
+    console.log(`Kling Multi-Image Gen: ${imageList.length} images`);
+
+    const response = await fetch(`${KLING_BASE_URL}/v1/videos/multi-image2video`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(body)
+    });
+
+    const result = await response.json();
+
+    if (result.code !== 0) {
+        throw new Error(`Kling API error: ${result.message || 'Failed to create task'}`);
+    }
+
+    const taskId = result.data?.task_id;
+    if (!taskId) {
+        throw new Error('No task ID returned from Kling API');
+    }
+
+    console.log(`Kling multi-image task created: ${taskId}`);
+
+    // Poll for completion
+    return await pollKlingTask(taskId, 'multi-image2video');
+}
+
+// ============================================================================
+// KLING AI IMAGE GENERATION HELPERS
+// ============================================================================
+
+/**
+ * Poll Kling image task status until complete
+ */
+async function pollKlingImageTask(taskId, maxWaitMs = 120000) {
+    const token = generateKlingJWT();
+    const startTime = Date.now();
+    const pollInterval = 3000; // 3 seconds for images (faster than video)
+
+    while (Date.now() - startTime < maxWaitMs) {
+        const response = await fetch(`${KLING_BASE_URL}/v1/images/generations/${taskId}`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        const result = await response.json();
+
+        if (result.code !== 0) {
+            throw new Error(`Kling API error: ${result.message || 'Unknown error'}`);
+        }
+
+        const status = result.data?.task_status;
+        console.log(`Kling image task ${taskId} status: ${status}`);
+
+        if (status === 'succeed') {
+            const imageUrl = result.data?.task_result?.images?.[0]?.url;
+            if (!imageUrl) {
+                throw new Error('No image URL in successful response');
+            }
+            return imageUrl;
+        } else if (status === 'failed') {
+            throw new Error(`Kling image generation failed: ${result.data?.task_status_msg || 'Unknown error'}`);
+        }
+
+        // Wait before next poll
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
+    }
+
+    throw new Error('Kling image generation timed out');
+}
+
+/**
+ * Generate image using Kling AI Image Generation API
+ */
+async function generateKlingImage({ prompt, imageBase64, modelId, aspectRatio }) {
+    const token = generateKlingJWT();
+
+    // Map frontend model ID to Kling API model_name
+    const modelMapping = {
+        'kling-v1': 'kling-v1',
+        'kling-v1-5': 'kling-v1-5',
+        'kling-v2': 'kling-v2',
+        'kling-v2-new': 'kling-v2-new',
+        'kling-v2-1': 'kling-v2-1'
+    };
+    const modelName = modelMapping[modelId] || 'kling-v2-1';
+
+    // Map aspect ratio - Kling supports: 16:9, 9:16, 1:1, 4:3, 3:4, 3:2, 2:3, 21:9
+    const ratioMapping = {
+        'Auto': '1:1',
+        '1:1': '1:1',
+        '16:9': '16:9',
+        '9:16': '9:16',
+        '4:3': '4:3',
+        '3:4': '3:4',
+        '3:2': '3:2',
+        '2:3': '2:3',
+        '21:9': '21:9',
+        '5:4': '4:3',
+        '4:5': '3:4'
+    };
+    const mappedRatio = ratioMapping[aspectRatio] || '1:1';
+
+    // Prepare request body
+    const body = {
+        model_name: modelName,
+        prompt: prompt,
+        aspect_ratio: mappedRatio,
+        n: 1
+    };
+
+    // Add reference image if provided (for image-to-image)
+    if (imageBase64) {
+        // For array of images, use the first one
+        const firstImage = Array.isArray(imageBase64) ? imageBase64[0] : imageBase64;
+        body.image = extractRawBase64(firstImage);
+    }
+
+    console.log(`Kling Image Gen: Using model ${modelName}, aspect ratio: ${mappedRatio}, has reference: ${!!imageBase64}`);
+
+    // Create task
+    const response = await fetch(`${KLING_BASE_URL}/v1/images/generations`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(body)
+    });
+
+    const result = await response.json();
+
+    if (result.code !== 0) {
+        throw new Error(`Kling API error: ${result.message || 'Failed to create image task'}`);
+    }
+
+    const taskId = result.data?.task_id;
+    if (!taskId) {
+        throw new Error('No task ID returned from Kling API');
+    }
+
+    console.log(`Kling image task created: ${taskId}`);
+
+    // Poll for completion
+    return await pollKlingImageTask(taskId);
+}
 
 // --- Library Assets API ---
 
@@ -391,82 +750,138 @@ app.put('/api/workflows/:id/cover', async (req, res) => {
 
 app.post('/api/generate-image', async (req, res) => {
     try {
-        const { prompt, aspectRatio, resolution, imageBase64: rawImageBase64 } = req.body;
+        const { prompt, aspectRatio, resolution, imageBase64: rawImageBase64, imageModel } = req.body;
 
-        if (!API_KEY) {
-            return res.status(500).json({ error: "Server missing API Key config" });
-        }
+        // Determine which provider to use based on model
+        const isKlingModel = imageModel && imageModel.startsWith('kling-');
 
-        const ai = getClient();
-        const modelName = 'gemini-3-pro-image-preview';
+        let imageBuffer;
+        let imageFormat = 'png';
 
-        const apiRatio = mapAspectRatio(aspectRatio);
+        if (isKlingModel) {
+            // ============================================================================
+            // KLING AI IMAGE GENERATION
+            // ============================================================================
 
-        const parts = [];
-
-        if (rawImageBase64) {
-            const rawImages = Array.isArray(rawImageBase64) ? rawImageBase64 : [rawImageBase64];
-            // Resolve each image to base64 (handles file URLs)
-            const images = rawImages.map(img => resolveImageToBase64(img)).filter(Boolean);
-
-            for (const img of images) {
-                const match = img.match(/^data:(image\/\w+);base64,/);
-                const mimeType = match ? match[1] : "image/png";
-                const base64Clean = img.replace(/^data:image\/\w+;base64,/, "");
-                parts.push({
-                    inlineData: {
-                        mimeType: mimeType,
-                        data: base64Clean
-                    }
-                });
+            if (!KLING_ACCESS_KEY || !KLING_SECRET_KEY) {
+                return res.status(500).json({ error: "Kling API credentials not configured. Add KLING_ACCESS_KEY and KLING_SECRET_KEY to .env" });
             }
-        }
 
-        parts.push({ text: prompt });
+            console.log(`Using Kling AI model for image: ${imageModel}`);
 
-        const response = await ai.models.generateContent({
-            model: modelName,
-            contents: {
-                parts: parts
-            },
-            config: {
-                responseModalities: ["TEXT", "IMAGE"],
-                temperature: 1.0,
+            // Resolve images if provided
+            let resolvedImages = null;
+            if (rawImageBase64) {
+                const rawImages = Array.isArray(rawImageBase64) ? rawImageBase64 : [rawImageBase64];
+                resolvedImages = rawImages.map(img => resolveImageToBase64(img)).filter(Boolean);
             }
-        });
 
-        const candidates = response.candidates || [];
-        if (candidates.length > 0 && candidates[0].content && candidates[0].content.parts) {
-            for (const part of candidates[0].content.parts) {
-                if (part.inlineData && part.inlineData.data) {
-                    // Save image to file instead of returning base64
-                    const imageId = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-                    const imagePath = path.join(IMAGES_DIR, `${imageId}.png`);
-                    const imageBuffer = Buffer.from(part.inlineData.data, 'base64');
-                    fs.writeFileSync(imagePath, imageBuffer);
+            // Generate using Kling API
+            const klingImageUrl = await generateKlingImage({
+                prompt,
+                imageBase64: resolvedImages,
+                modelId: imageModel,
+                aspectRatio
+            });
 
-                    // Return URL to the saved file
-                    // Use new library path
-                    const imageUrl = `/library/images/${imageId}.png`;
+            // Download the image from Kling's URL
+            const imageResponse = await fetch(klingImageUrl);
+            if (!imageResponse.ok) {
+                throw new Error('Failed to download image from Kling');
+            }
+            imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
 
-                    // SAVE METADATA (Required for History)
-                    const metadata = {
-                        id: imageId,
-                        filename: `${imageId}.png`,
-                        prompt: prompt,
-                        createdAt: new Date().toISOString(),
-                        type: 'images'
-                    };
-                    const metaPath = path.join(IMAGES_DIR, `${imageId}.json`);
-                    fs.writeFileSync(metaPath, JSON.stringify(metadata, null, 2));
+            // Detect format from URL or content-type
+            if (klingImageUrl.includes('.jpg') || klingImageUrl.includes('.jpeg')) {
+                imageFormat = 'jpg';
+            }
 
-                    console.log(`Image saved: ${imageUrl}`);
-                    return res.json({ resultUrl: imageUrl });
+        } else {
+            // ============================================================================
+            // GEMINI IMAGE GENERATION (Default)
+            // ============================================================================
+
+            if (!API_KEY) {
+                return res.status(500).json({ error: "Server missing API Key config" });
+            }
+
+            const ai = getClient();
+            const modelName = 'gemini-3-pro-image-preview';
+
+            const apiRatio = mapAspectRatio(aspectRatio);
+
+            const parts = [];
+
+            if (rawImageBase64) {
+                const rawImages = Array.isArray(rawImageBase64) ? rawImageBase64 : [rawImageBase64];
+                // Resolve each image to base64 (handles file URLs)
+                const images = rawImages.map(img => resolveImageToBase64(img)).filter(Boolean);
+
+                for (const img of images) {
+                    const match = img.match(/^data:(image\/\w+);base64,/);
+                    const mimeType = match ? match[1] : "image/png";
+                    const base64Clean = img.replace(/^data:image\/\w+;base64,/, "");
+                    parts.push({
+                        inlineData: {
+                            mimeType: mimeType,
+                            data: base64Clean
+                        }
+                    });
                 }
             }
+
+            parts.push({ text: prompt });
+
+            const response = await ai.models.generateContent({
+                model: modelName,
+                contents: {
+                    parts: parts
+                },
+                config: {
+                    responseModalities: ["TEXT", "IMAGE"],
+                    temperature: 1.0,
+                }
+            });
+
+            const candidates = response.candidates || [];
+            if (candidates.length > 0 && candidates[0].content && candidates[0].content.parts) {
+                for (const part of candidates[0].content.parts) {
+                    if (part.inlineData && part.inlineData.data) {
+                        imageBuffer = Buffer.from(part.inlineData.data, 'base64');
+                        break;
+                    }
+                }
+            }
+
+            if (!imageBuffer) {
+                throw new Error("No image data returned from Gemini");
+            }
         }
 
-        throw new Error("No image data returned from provider");
+        // ============================================================================
+        // SAVE IMAGE TO LIBRARY (Common for both providers)
+        // ============================================================================
+
+        const imageId = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const imagePath = path.join(IMAGES_DIR, `${imageId}.${imageFormat}`);
+        fs.writeFileSync(imagePath, imageBuffer);
+
+        const imageUrl = `/library/images/${imageId}.${imageFormat}`;
+
+        // SAVE METADATA (Required for History)
+        const metadata = {
+            id: imageId,
+            filename: `${imageId}.${imageFormat}`,
+            prompt: prompt,
+            model: imageModel || 'gemini-pro',
+            createdAt: new Date().toISOString(),
+            type: 'images'
+        };
+        const metaPath = path.join(IMAGES_DIR, `${imageId}.json`);
+        fs.writeFileSync(metaPath, JSON.stringify(metadata, null, 2));
+
+        console.log(`Image saved: ${imageUrl} (model: ${imageModel || 'gemini-pro'})`);
+        return res.json({ resultUrl: imageUrl });
 
     } catch (error) {
         console.error("Server Image Gen Error:", error);
@@ -476,112 +891,153 @@ app.post('/api/generate-image', async (req, res) => {
 
 app.post('/api/generate-video', async (req, res) => {
     try {
-        const { prompt, imageBase64: rawImageBase64, lastFrameBase64: rawLastFrameBase64, aspectRatio, resolution } = req.body;
+        const { prompt, imageBase64: rawImageBase64, lastFrameBase64: rawLastFrameBase64, aspectRatio, resolution, videoModel } = req.body;
 
         // Resolve file URLs to base64 if needed
         const imageBase64 = resolveImageToBase64(rawImageBase64);
         const lastFrameBase64 = resolveImageToBase64(rawLastFrameBase64);
 
-        if (!API_KEY) {
-            return res.status(500).json({ error: "Server missing API Key config" });
-        }
+        // Determine which provider to use based on model
+        const isKlingModel = videoModel && videoModel.startsWith('kling-');
 
-        const ai = getClient();
-        const model = 'veo-3.1-fast-generate-preview';
+        let videoUrl;
+        let videoBuffer;
 
-        let apiResolution = '720p';
-        if (resolution === '1080p') apiResolution = '1080p';
+        if (isKlingModel) {
+            // ============================================================================
+            // KLING AI VIDEO GENERATION
+            // ============================================================================
 
-        const apiAspectRatio = aspectRatio === '9:16' ? '9:16' : '16:9';
-
-        const videoConfig = {
-            numberOfVideos: 1,
-            resolution: apiResolution,
-            aspectRatio: apiAspectRatio
-        };
-
-        // Add last_frame for frame-to-frame interpolation (Veo 3.1 feature)
-        if (lastFrameBase64) {
-            const lastMatch = lastFrameBase64.match(/^data:(image\/\w+);base64,/);
-            let lastMimeType = lastMatch ? lastMatch[1] : 'image/jpeg';
-            const lastBase64Clean = lastFrameBase64.replace(/^data:image\/\w+;base64,/, "");
-
-            if (lastMimeType === 'image/png' || lastMimeType === 'image/webp') {
-                lastMimeType = 'image/jpeg';
+            if (!KLING_ACCESS_KEY || !KLING_SECRET_KEY) {
+                return res.status(500).json({ error: "Kling API credentials not configured. Add KLING_ACCESS_KEY and KLING_SECRET_KEY to .env" });
             }
 
-            videoConfig.lastFrame = {
-                imageBytes: lastBase64Clean,
-                mimeType: lastMimeType
-            };
-            console.log(`Video Gen: Using last_frame with mimeType: ${lastMimeType}, base64 length: ${lastBase64Clean.length}`);
-        }
+            console.log(`Using Kling AI model: ${videoModel}`);
 
-        const args = {
-            model: model,
-            prompt: prompt || "A cinematic video",
-            config: videoConfig
-        };
+            let klingVideoUrl;
 
-        if (imageBase64) {
-            // Extract MIME type from data URL or default to jpeg (more compatible)
-            const match = imageBase64.match(/^data:(image\/\w+);base64,/);
-            let mimeType = match ? match[1] : 'image/jpeg';
-            const base64Clean = imageBase64.replace(/^data:image\/\w+;base64,/, "");
+            // For frame-to-frame (start + end frame), use image2video with image_tail in Pro mode
+            // This matches how the Kling platform handles it
+            klingVideoUrl = await generateKlingVideo({
+                prompt,
+                imageBase64,
+                lastFrameBase64, // Pass through - will trigger Pro mode automatically
+                modelId: videoModel,
+                aspectRatio
+            });
 
-            // Log for debugging
-            console.log(`Video Gen: Using image with mimeType: ${mimeType}, base64 length: ${base64Clean.length}`);
+            // Download the video from Kling's URL
+            const videoResponse = await fetch(klingVideoUrl);
+            if (!videoResponse.ok) {
+                throw new Error('Failed to download video from Kling');
+            }
+            videoBuffer = Buffer.from(await videoResponse.arrayBuffer());
 
-            // Veo requires specific format - use image/jpeg for best compatibility
-            if (mimeType === 'image/png' || mimeType === 'image/webp') {
-                mimeType = 'image/jpeg';
+        } else {
+            // ============================================================================
+            // VEO (GOOGLE) VIDEO GENERATION (Default)
+            // ============================================================================
+
+            if (!API_KEY) {
+                return res.status(500).json({ error: "Server missing API Key config" });
             }
 
-            args.image = {
-                imageBytes: base64Clean,
-                mimeType: mimeType
+            const ai = getClient();
+            const model = 'veo-3.1-fast-generate-preview';
+
+            let apiResolution = '720p';
+            if (resolution === '1080p') apiResolution = '1080p';
+
+            const apiAspectRatio = aspectRatio === '9:16' ? '9:16' : '16:9';
+
+            const videoConfig = {
+                numberOfVideos: 1,
+                resolution: apiResolution,
+                aspectRatio: apiAspectRatio
             };
+
+            // Add last_frame for frame-to-frame interpolation (Veo 3.1 feature)
+            if (lastFrameBase64) {
+                const lastMatch = lastFrameBase64.match(/^data:(image\/\w+);base64,/);
+                let lastMimeType = lastMatch ? lastMatch[1] : 'image/jpeg';
+                const lastBase64Clean = lastFrameBase64.replace(/^data:image\/\w+;base64,/, "");
+
+                if (lastMimeType === 'image/png' || lastMimeType === 'image/webp') {
+                    lastMimeType = 'image/jpeg';
+                }
+
+                videoConfig.lastFrame = {
+                    imageBytes: lastBase64Clean,
+                    mimeType: lastMimeType
+                };
+                console.log(`Video Gen: Using last_frame with mimeType: ${lastMimeType}, base64 length: ${lastBase64Clean.length}`);
+            }
+
+            const args = {
+                model: model,
+                prompt: prompt || "A cinematic video",
+                config: videoConfig
+            };
+
+            if (imageBase64) {
+                const match = imageBase64.match(/^data:(image\/\w+);base64,/);
+                let mimeType = match ? match[1] : 'image/jpeg';
+                const base64Clean = imageBase64.replace(/^data:image\/\w+;base64,/, "");
+
+                console.log(`Video Gen: Using image with mimeType: ${mimeType}, base64 length: ${base64Clean.length}`);
+
+                if (mimeType === 'image/png' || mimeType === 'image/webp') {
+                    mimeType = 'image/jpeg';
+                }
+
+                args.image = {
+                    imageBytes: base64Clean,
+                    mimeType: mimeType
+                };
+            }
+
+            console.log('Calling Veo API with args:', { ...args, image: args.image ? { mimeType: args.image.mimeType, length: args.image.imageBytes?.length } : undefined });
+
+            let operation = await ai.models.generateVideos(args);
+
+            while (!operation.done) {
+                await new Promise(resolve => setTimeout(resolve, 5000));
+                operation = await ai.operations.getVideosOperation({ operation: operation });
+            }
+
+            const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
+
+            if (!downloadLink) {
+                throw new Error("No video URI returned.");
+            }
+
+            const videoRes = await fetch(`${downloadLink}&key=${API_KEY}`);
+            videoBuffer = Buffer.from(await videoRes.arrayBuffer());
         }
 
-        console.log('Calling Veo API with args:', { ...args, image: args.image ? { mimeType: args.image.mimeType, length: args.image.imageBytes?.length } : undefined });
+        // ============================================================================
+        // SAVE VIDEO TO LIBRARY (Common for both providers)
+        // ============================================================================
 
-        let operation = await ai.models.generateVideos(args);
-
-        while (!operation.done) {
-            await new Promise(resolve => setTimeout(resolve, 5000));
-            operation = await ai.operations.getVideosOperation({ operation: operation });
-        }
-
-        const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
-
-        if (!downloadLink) {
-            throw new Error("No video URI returned.");
-        }
-
-        const videoRes = await fetch(`${downloadLink}&key=${API_KEY}`);
-        const arrayBuffer = await videoRes.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-
-        // Save video to file instead of returning base64
         const videoId = `vid_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         const videoPath = path.join(VIDEOS_DIR, `${videoId}.mp4`);
-        fs.writeFileSync(videoPath, buffer);
+        fs.writeFileSync(videoPath, videoBuffer);
 
-        // Return URL to the saved file
-        const videoUrl = `/library/videos/${videoId}.mp4`;
+        videoUrl = `/library/videos/${videoId}.mp4`;
 
         // SAVE METADATA (Required for History)
         const metadata = {
             id: videoId,
             filename: `${videoId}.mp4`,
             prompt: prompt || "A cinematic video",
+            model: videoModel || 'veo-3.1',
             createdAt: new Date().toISOString(),
             type: 'videos'
         };
         const metaPath = path.join(VIDEOS_DIR, `${videoId}.json`);
         fs.writeFileSync(metaPath, JSON.stringify(metadata, null, 2));
 
-        console.log(`Video saved: ${videoUrl}`);
+        console.log(`Video saved: ${videoUrl} (model: ${videoModel || 'veo-3.1'})`);
         return res.json({ resultUrl: videoUrl });
 
     } catch (error) {

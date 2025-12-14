@@ -6,6 +6,7 @@ export interface GenerateImageParams {
   aspectRatio?: string;
   resolution?: string;
   imageBase64?: string | string[]; // Supports single image or array of images
+  imageModel?: string; // Image model version (e.g., 'gemini-pro', 'kling-v2')
 }
 
 export interface GenerateVideoParams {
@@ -14,6 +15,7 @@ export interface GenerateVideoParams {
   lastFrameBase64?: string; // For frame-to-frame interpolation (end frame)
   aspectRatio?: string;
   resolution?: string; // Add resolution to params
+  videoModel?: string; // Video model version (e.g., 'veo-3.1', 'kling-v2-1')
 }
 
 /**
