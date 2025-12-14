@@ -30,6 +30,7 @@ interface ContextMenuProps {
   onCopy?: () => void;
   onDuplicate?: () => void;
   onCreateAsset?: () => void;
+  onAddAssets?: () => void;
   canUndo?: boolean;
   canRedo?: boolean;
 }
@@ -45,6 +46,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   onCopy,
   onDuplicate,
   onCreateAsset,
+  onAddAssets,
   canUndo = false,
   canRedo = false
 }) => {
@@ -204,7 +206,12 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
           <MenuItem
             icon={<Layers size={16} />}
             label="Add Assets"
-            onClick={() => { }} // Placeholder
+            onClick={() => {
+              if (onAddAssets) {
+                onAddAssets();
+                onClose();
+              }
+            }}
           />
           <div className="my-1 border-t border-neutral-800 mx-1" />
 

@@ -71,6 +71,7 @@ export default function App() {
   });
 
   const [isAssetLibraryOpen, setIsAssetLibraryOpen] = useState(false);
+  const [assetLibraryVariant, setAssetLibraryVariant] = useState<'panel' | 'modal'>('panel');
   const [assetLibraryY, setAssetLibraryY] = useState(0);
 
 
@@ -322,7 +323,18 @@ export default function App() {
   const handleAssetsClick = (e: React.MouseEvent) => {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     setAssetLibraryY(rect.top);
+    setAssetLibraryVariant('panel');
     setIsAssetLibraryOpen(prev => !prev);
+    closeHistoryPanel();
+    closeWorkflowPanel();
+    closeChat();
+  };
+
+  const handleContextMenuAddAssets = () => {
+    // Open asset library at the context menu position (or reasonable default)
+    setAssetLibraryY(contextMenu.y);
+    setAssetLibraryVariant('modal');
+    setIsAssetLibraryOpen(true);
     closeHistoryPanel();
     closeWorkflowPanel();
     closeChat();
@@ -937,6 +949,7 @@ export default function App() {
         onClose={closeAssetLibrary}
         onSelectAsset={handleLibrarySelect}
         panelY={assetLibraryY}
+        variant={assetLibraryVariant}
       />
 
       <CreateAssetModal
@@ -1147,6 +1160,7 @@ export default function App() {
         onCopy={handleCopy}
         onDuplicate={handleDuplicate}
         onCreateAsset={handleContextMenuCreateAsset}
+        onAddAssets={handleContextMenuAddAssets}
         canUndo={canUndo}
         canRedo={canRedo}
       />

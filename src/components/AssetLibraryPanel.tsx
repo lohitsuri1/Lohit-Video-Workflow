@@ -14,6 +14,7 @@ interface AssetLibraryPanelProps {
     onClose: () => void;
     onSelectAsset: (url: string, type: 'image' | 'video') => void;
     panelY?: number;
+    variant?: 'panel' | 'modal';
 }
 
 const CATEGORIES = [
@@ -30,18 +31,18 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({
     isOpen,
     onClose,
     onSelectAsset,
-    panelY = 100
+    panelY = 100,
+    variant = 'panel'
 }) => {
-    const [activeTab, setActiveTab] = useState<'public' | 'my'>('my');
     const [selectedCategory, setSelectedCategory] = useState('All');
     const [assets, setAssets] = useState<LibraryAsset[]>([]);
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        if (isOpen && activeTab === 'my') {
+        if (isOpen) {
             fetchLibrary();
         }
-    }, [isOpen, activeTab]);
+    }, [isOpen]);
 
     const fetchLibrary = async () => {
         setLoading(true);
@@ -57,37 +58,67 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({
         }
     };
 
-    const filteredAssets = assets.filter(asset =>
-        selectedCategory === 'All' || asset.category === selectedCategory
-    );
-
     if (!isOpen) return null;
+
+    if (variant === 'modal') {
+        return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+                <div
+                    className="flex flex-col w-[800px] h-[600px] bg-[#0a0a0a] border border-neutral-800 rounded-2xl shadow-2xl overflow-hidden"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div className="flex items-center justify-between p-4 border-b border-neutral-800">
+                        <h2 className="text-lg font-medium text-white pl-2">Asset Library</h2>
+                        <button onClick={onClose} className="p-2 hover:bg-neutral-800 rounded-lg text-neutral-400 hover:text-white transition-colors">
+                            <X size={20} />
+                        </button>
+                    </div>
+                    {/* Reuse internal content logic by extracting or just inlining for now since structure differs slightly (modal has header) */}
+                    <AssetLibraryContent
+                        selectedCategory={selectedCategory}
+                        setSelectedCategory={setSelectedCategory}
+                        assets={assets}
+                        loading={loading}
+                        onSelectAsset={onSelectAsset}
+                    />
+                </div>
+                {/* Click outside to close */}
+                <div className="absolute inset-0 -z-10" onClick={onClose} />
+            </div>
+        );
+    }
 
     return (
         <div
             className="fixed left-20 z-40 w-96 bg-[#0a0a0a]/95 backdrop-blur-xl border border-neutral-800 rounded-2xl shadow-2xl flex flex-col h-[600px] overflow-hidden animate-in slide-in-from-left-4 duration-200"
             style={{ top: Math.min(window.innerHeight - 610, Math.max(20, panelY)) }}
         >
-            {/* Header Tabs */}
-            <div className="flex border-b border-neutral-800">
-                <button
-                    className={`flex-1 py-3 text-sm font-medium transition-colors ${activeTab === 'public' ? 'text-white border-b-2 border-white' : 'text-neutral-500 hover:text-neutral-300'}`}
-                    onClick={() => setActiveTab('public')}
-                >
-                    Public Assets
-                </button>
-                <button
-                    className={`flex-1 py-3 text-sm font-medium transition-colors ${activeTab === 'my' ? 'text-white border-b-2 border-white' : 'text-neutral-500 hover:text-neutral-300'}`}
-                    onClick={() => setActiveTab('my')}
-                >
-                    My Assets
-                </button>
-            </div>
+            <AssetLibraryContent
+                selectedCategory={selectedCategory}
+                setSelectedCategory={setSelectedCategory}
+                assets={assets}
+                loading={loading}
+                onSelectAsset={onSelectAsset}
+            />
+        </div>
+    );
+};
+
+// Extracted Internal Component for reuse
+const AssetLibraryContent = ({
+    selectedCategory, setSelectedCategory,
+    assets, loading, onSelectAsset
+}: any) => {
+    const filteredAssets = assets.filter((asset: any) =>
+        selectedCategory === 'All' || asset.category === selectedCategory
+    );
+
+    return (
+        <>
 
             <div className="p-4 flex flex-col gap-4 h-full overflow-hidden">
-
                 {/* Filters */}
-                <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide shrink-0">
                     {CATEGORIES.map(cat => (
                         <button
                             key={cat}
@@ -103,7 +134,7 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({
                 </div>
 
                 {/* Content */}
-                <div className="flex-1 overflow-y-auto pr-2 grid grid-cols-2 gap-3">
+                <div className="flex-1 overflow-y-auto pr-2 grid grid-cols-2 gap-3 pb-4">
                     {loading ? (
                         <div className="col-span-2 text-center py-10 text-neutral-500">Loading...</div>
                     ) : filteredAssets.length === 0 ? (
@@ -111,7 +142,7 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({
                             No assets found in this category.
                         </div>
                     ) : (
-                        filteredAssets.map(asset => (
+                        filteredAssets.map((asset: any) => (
                             <div
                                 key={asset.id}
                                 className="group relative aspect-square bg-neutral-900 rounded-lg overflow-hidden border border-neutral-800 hover:border-neutral-600 cursor-pointer"
@@ -129,8 +160,7 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({
                         ))
                     )}
                 </div>
-
             </div>
-        </div>
+        </>
     );
 };
