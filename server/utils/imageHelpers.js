@@ -117,3 +117,43 @@ export function saveBufferToFile(buffer, dir, prefix, extension) {
 
     return { id, path: filePath, url, filename };
 }
+
+/**
+ * Save base64 data URL to file and return library URL
+ * Used to sanitize workflow nodes before saving
+ * 
+ * @param {string} dataUrl - Base64 data URL (data:image/png;base64,...)
+ * @param {string} imagesDir - Directory for saving images
+ * @param {string} videosDir - Directory for saving videos
+ * @returns {string} File URL or original value if not a data URL
+ */
+export function saveBase64ToFile(dataUrl, imagesDir, videosDir) {
+    if (!dataUrl || typeof dataUrl !== 'string') return dataUrl;
+
+    // Skip if already a file URL
+    if (!dataUrl.startsWith('data:')) return dataUrl;
+
+    // Match image data URLs
+    const imageMatch = dataUrl.match(/^data:image\/(png|jpeg|jpg|webp|gif);base64,(.+)$/);
+    if (imageMatch) {
+        const ext = imageMatch[1] === 'jpeg' ? 'jpg' : imageMatch[1];
+        const base64Data = imageMatch[2];
+        const buffer = Buffer.from(base64Data, 'base64');
+        const saved = saveBufferToFile(buffer, imagesDir, 'wf_img', ext);
+        console.log(`  Workflow sanitize: saved image ${saved.filename} (${(buffer.length / 1024).toFixed(1)} KB)`);
+        return saved.url;
+    }
+
+    // Match video data URLs
+    const videoMatch = dataUrl.match(/^data:video\/(mp4|webm);base64,(.+)$/);
+    if (videoMatch) {
+        const ext = videoMatch[1];
+        const base64Data = videoMatch[2];
+        const buffer = Buffer.from(base64Data, 'base64');
+        const saved = saveBufferToFile(buffer, videosDir, 'wf_vid', ext);
+        console.log(`  Workflow sanitize: saved video ${saved.filename} (${(buffer.length / 1024 / 1024).toFixed(2)} MB)`);
+        return saved.url;
+    }
+
+    return dataUrl;
+}

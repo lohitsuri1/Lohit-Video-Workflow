@@ -297,6 +297,81 @@ app.post('/api/workflows', async (req, res) => {
     }
 });
 
+// --- Public Workflows API (bundled examples) ---
+
+// List public workflows (shipped with the repo in public/workflows/)
+// Dynamically scans directory - no need to maintain index.json manually
+app.get('/api/public-workflows', async (req, res) => {
+    try {
+        const publicWorkflowsDir = path.join(__dirname, '..', 'public', 'workflows');
+
+        if (!fs.existsSync(publicWorkflowsDir)) {
+            return res.json([]);
+        }
+
+        // Scan all .json files except index.json
+        const files = fs.readdirSync(publicWorkflowsDir)
+            .filter(f => f.endsWith('.json') && f !== 'index.json');
+
+        const workflows = files.map(file => {
+            try {
+                const content = fs.readFileSync(path.join(publicWorkflowsDir, file), 'utf8');
+                const workflow = JSON.parse(content);
+
+                // Generate description from workflow content
+                const nodeTypes = workflow.nodes?.reduce((acc, n) => {
+                    acc[n.type] = (acc[n.type] || 0) + 1;
+                    return acc;
+                }, {}) || {};
+                const typesSummary = Object.entries(nodeTypes)
+                    .map(([type, count]) => `${count} ${type}${count > 1 ? 's' : ''}`)
+                    .join(', ');
+                const description = workflow.description ||
+                    (typesSummary ? `Workflow with ${typesSummary}` : 'A public workflow template');
+
+                return {
+                    id: file.replace('.json', ''),
+                    title: workflow.title || 'Untitled Workflow',
+                    description,
+                    nodeCount: workflow.nodes?.length || 0,
+                    coverUrl: workflow.coverUrl || null
+                };
+            } catch (parseError) {
+                console.warn(`Skipping invalid workflow file: ${file}`, parseError.message);
+                return null;
+            }
+        }).filter(Boolean); // Remove any null entries from parse errors
+
+        // Sort by title alphabetically
+        workflows.sort((a, b) => a.title.localeCompare(b.title));
+
+        res.json(workflows);
+    } catch (error) {
+        console.error("List public workflows error:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Load specific public workflow
+app.get('/api/public-workflows/:id', async (req, res) => {
+    try {
+        const publicWorkflowsDir = path.join(__dirname, '..', 'public', 'workflows');
+        const filePath = path.join(publicWorkflowsDir, `${req.params.id}.json`);
+
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({ error: "Public workflow not found" });
+        }
+
+        const content = fs.readFileSync(filePath, 'utf8');
+        res.json(JSON.parse(content));
+    } catch (error) {
+        console.error("Load public workflow error:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// --- User Workflows API ---
+
 // List all workflows
 app.get('/api/workflows', async (req, res) => {
     try {

@@ -75,21 +75,36 @@ export const useWorkflow = ({
 
     /**
      * Load workflow from server
+     * Supports both user workflows and public workflows (prefixed with "public:")
      * Returns the loaded workflow's node count and title for tracking
      */
     const handleLoadWorkflow = useCallback(async (id: string): Promise<{ nodeCount: number; title: string } | null> => {
         try {
-            const response = await fetch(`http://localhost:3001/api/workflows/${id}`);
+            // Check if loading a public workflow
+            const isPublic = id.startsWith('public:');
+            const workflowId = isPublic ? id.replace('public:', '') : id;
+            const endpoint = isPublic
+                ? `http://localhost:3001/api/public-workflows/${workflowId}`
+                : `http://localhost:3001/api/workflows/${workflowId}`;
+
+            const response = await fetch(endpoint);
             if (response.ok) {
                 const workflow = await response.json();
-                setWorkflowId(workflow.id);
+
+                // For public workflows, don't set the workflowId so it saves as a new workflow
+                if (!isPublic) {
+                    setWorkflowId(workflow.id);
+                } else {
+                    setWorkflowId(null); // New copy, not linked to public workflow
+                }
+
                 setCanvasTitle(workflow.title || 'Untitled');
                 setEditingTitleValue(workflow.title || 'Untitled');
                 setNodes(workflow.nodes || []);
                 // Reset selection
                 setSelectedNodeIds([]);
                 setIsWorkflowPanelOpen(false);
-                console.log('Workflow loaded:', workflow.id);
+                console.log(isPublic ? 'Public workflow loaded:' : 'Workflow loaded:', workflowId);
                 // Return info for tracking
                 return {
                     nodeCount: (workflow.nodes || []).length,

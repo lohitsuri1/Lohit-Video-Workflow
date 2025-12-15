@@ -15,6 +15,7 @@ interface WorkflowSummary {
     updatedAt: string;
     nodeCount: number;
     coverUrl?: string;
+    description?: string; // For public workflows
 }
 
 interface AssetMetadata {
@@ -40,6 +41,8 @@ export const WorkflowPanel: React.FC<WorkflowPanelProps> = ({
     panelY = 200
 }) => {
     const [workflows, setWorkflows] = useState<WorkflowSummary[]>([]);
+    const [publicWorkflows, setPublicWorkflows] = useState<WorkflowSummary[]>([]);
+    const [activeTab, setActiveTab] = useState<'my' | 'public'>('my');
     const [loading, setLoading] = useState(false);
     const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
@@ -52,6 +55,7 @@ export const WorkflowPanel: React.FC<WorkflowPanelProps> = ({
     useEffect(() => {
         if (isOpen) {
             fetchWorkflows();
+            fetchPublicWorkflows();
         }
     }, [isOpen]);
 
@@ -67,6 +71,18 @@ export const WorkflowPanel: React.FC<WorkflowPanelProps> = ({
             console.error('Failed to fetch workflows:', error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchPublicWorkflows = async () => {
+        try {
+            const response = await fetch('http://localhost:3001/api/public-workflows');
+            if (response.ok) {
+                const data = await response.json();
+                setPublicWorkflows(data);
+            }
+        } catch (error) {
+            console.error('Failed to fetch public workflows:', error);
         }
     };
 
@@ -144,12 +160,21 @@ export const WorkflowPanel: React.FC<WorkflowPanelProps> = ({
                 className="fixed left-20 w-[700px] bg-[#0a0a0a]/95 backdrop-blur-xl border border-neutral-800 rounded-2xl shadow-2xl z-40 flex flex-col overflow-hidden max-h-[500px]"
                 style={{ top: panelY }}
             >
-                {/* Header */}
+                {/* Header with Tabs */}
                 <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-800">
                     <div className="flex items-center gap-6">
-                        <span className="text-white font-medium border-b-2 border-white pb-1">
+                        <button
+                            onClick={() => setActiveTab('my')}
+                            className={`font-medium pb-1 transition-colors ${activeTab === 'my' ? 'text-white border-b-2 border-white' : 'text-neutral-500 hover:text-neutral-300'}`}
+                        >
                             My Workflows
-                        </span>
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('public')}
+                            className={`font-medium pb-1 transition-colors ${activeTab === 'public' ? 'text-white border-b-2 border-white' : 'text-neutral-500 hover:text-neutral-300'}`}
+                        >
+                            Public Workflows
+                        </button>
                     </div>
                     <button
                         onClick={onClose}
@@ -161,72 +186,120 @@ export const WorkflowPanel: React.FC<WorkflowPanelProps> = ({
 
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto p-4">
-                    {loading ? (
+                    {loading && activeTab === 'my' ? (
                         <div className="flex items-center justify-center h-40">
                             <Loader2 className="animate-spin text-neutral-500" size={24} />
                         </div>
-                    ) : workflows.length === 0 ? (
-                        <div className="flex items-center justify-center h-40 text-neutral-500">
-                            No workflows found
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-3 gap-4">
-                            {workflows.map(workflow => (
-                                <div
-                                    key={workflow.id}
-                                    onClick={() => onLoadWorkflow(workflow.id)}
-                                    className={`rounded-xl overflow-hidden cursor-pointer transition-all hover:scale-105 group ${workflow.id === currentWorkflowId
-                                        ? 'ring-2 ring-blue-500'
-                                        : ''
-                                        }`}
-                                >
-                                    {/* Thumbnail */}
-                                    <div className="aspect-[4/3] bg-gradient-to-br from-neutral-800 to-neutral-900 flex items-center justify-center relative overflow-hidden">
-                                        {workflow.coverUrl ? (
-                                            <img
-                                                src={workflow.coverUrl}
-                                                alt={workflow.title}
-                                                className="w-full h-full object-cover"
-                                            />
-                                        ) : (
-                                            <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-600/20 flex items-center justify-center">
-                                                <FileText size={28} className="text-neutral-500" />
-                                            </div>
-                                        )}
+                    ) : activeTab === 'my' ? (
+                        /* My Workflows Tab */
+                        workflows.length === 0 ? (
+                            <div className="flex items-center justify-center h-40 text-neutral-500">
+                                No workflows found
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-3 gap-4">
+                                {workflows.map(workflow => (
+                                    <div
+                                        key={workflow.id}
+                                        onClick={() => onLoadWorkflow(workflow.id)}
+                                        className={`rounded-xl overflow-hidden cursor-pointer transition-all hover:scale-105 group ${workflow.id === currentWorkflowId
+                                            ? 'ring-2 ring-blue-500'
+                                            : ''
+                                            }`}
+                                    >
+                                        {/* Thumbnail */}
+                                        <div className="aspect-[4/3] bg-gradient-to-br from-neutral-800 to-neutral-900 flex items-center justify-center relative overflow-hidden">
+                                            {workflow.coverUrl ? (
+                                                <img
+                                                    src={workflow.coverUrl}
+                                                    alt={workflow.title}
+                                                    className="w-full h-full object-cover"
+                                                />
+                                            ) : (
+                                                <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-600/20 flex items-center justify-center">
+                                                    <FileText size={28} className="text-neutral-500" />
+                                                </div>
+                                            )}
 
-                                        {/* Action buttons */}
-                                        <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                                            {/* Edit cover button */}
-                                            <button
-                                                onClick={(e) => openCoverEditor(workflow.id, e)}
-                                                className="p-1.5 bg-black/50 hover:bg-blue-500 rounded-lg transition-all"
-                                                title="Edit cover"
-                                            >
-                                                <Pencil size={14} className="text-white" />
-                                            </button>
-                                            {/* Delete button */}
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setDeleteConfirm(workflow.id);
-                                                }}
-                                                className="p-1.5 bg-black/50 hover:bg-red-500 rounded-lg transition-all"
-                                                title="Delete workflow"
-                                            >
-                                                <Trash2 size={14} className="text-white" />
-                                            </button>
+                                            {/* Action buttons */}
+                                            <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                                                {/* Edit cover button */}
+                                                <button
+                                                    onClick={(e) => openCoverEditor(workflow.id, e)}
+                                                    className="p-1.5 bg-black/50 hover:bg-blue-500 rounded-lg transition-all"
+                                                    title="Edit cover"
+                                                >
+                                                    <Pencil size={14} className="text-white" />
+                                                </button>
+                                                {/* Delete button */}
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setDeleteConfirm(workflow.id);
+                                                    }}
+                                                    className="p-1.5 bg-black/50 hover:bg-red-500 rounded-lg transition-all"
+                                                    title="Delete workflow"
+                                                >
+                                                    <Trash2 size={14} className="text-white" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                        {/* Info */}
+                                        <div className="p-3 bg-neutral-900/50">
+                                            <h3 className="font-medium text-white text-sm truncate">{workflow.title || 'Untitled'}</h3>
+                                            <p className="text-xs text-neutral-500 mt-0.5">
+                                                {workflow.nodeCount} nodes
+                                            </p>
                                         </div>
                                     </div>
-                                    {/* Info */}
-                                    <div className="p-3 bg-neutral-900/50">
-                                        <h3 className="font-medium text-white text-sm truncate">{workflow.title || 'Untitled'}</h3>
-                                        <p className="text-xs text-neutral-500 mt-0.5">
-                                            {workflow.nodeCount} nodes
-                                        </p>
+                                ))}
+                            </div>
+                        )
+                    ) : (
+                        /* Public Workflows Tab */
+                        publicWorkflows.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center h-40 text-neutral-500 gap-2">
+                                <FileText size={32} className="opacity-50" />
+                                <p>No public workflows available</p>
+                                <p className="text-xs text-neutral-600">Add workflow JSONs to public/workflows/</p>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-3 gap-4">
+                                {publicWorkflows.map(workflow => (
+                                    <div
+                                        key={workflow.id}
+                                        onClick={() => onLoadWorkflow(`public:${workflow.id}`)}
+                                        className="rounded-xl overflow-hidden cursor-pointer transition-all hover:scale-105 group"
+                                    >
+                                        {/* Thumbnail */}
+                                        <div className="aspect-[4/3] bg-gradient-to-br from-green-800/30 to-emerald-900/30 flex items-center justify-center relative overflow-hidden">
+                                            {workflow.coverUrl ? (
+                                                <img
+                                                    src={workflow.coverUrl}
+                                                    alt={workflow.title}
+                                                    className="w-full h-full object-cover"
+                                                />
+                                            ) : (
+                                                <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-green-500/20 to-emerald-600/20 flex items-center justify-center">
+                                                    <FileText size={28} className="text-neutral-500" />
+                                                </div>
+                                            )}
+                                            {/* Public badge */}
+                                            <div className="absolute top-2 left-2 px-2 py-0.5 bg-green-600/80 rounded text-[10px] font-medium text-white">
+                                                PUBLIC
+                                            </div>
+                                        </div>
+                                        {/* Info */}
+                                        <div className="p-3 bg-neutral-900/50">
+                                            <h3 className="font-medium text-white text-sm truncate">{workflow.title || 'Untitled'}</h3>
+                                            <p className="text-xs text-neutral-500 mt-0.5">
+                                                {workflow.description || `${workflow.nodeCount} nodes`}
+                                            </p>
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
-                        </div>
+                                ))}
+                            </div>
+                        )
                     )}
                 </div>
             </div>
