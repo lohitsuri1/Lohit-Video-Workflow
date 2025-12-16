@@ -63,8 +63,44 @@ export const useTextNodeHandlers = ({
         setSelectedNodeIds([nodeId]);
     };
 
+    /**
+     * Handle "Text to Image" - switches to editing mode and creates connected Image node
+     */
+    const handleTextToImage = (nodeId: string) => {
+        const textNode = nodes.find(n => n.id === nodeId);
+        if (!textNode) return;
+
+        // Create Image node to the right
+        const imageNodeId = crypto.randomUUID();
+        const GAP = 100;
+        const NODE_WIDTH = 340;
+
+        const imageNode: NodeData = {
+            id: imageNodeId,
+            type: NodeType.IMAGE,
+            x: textNode.x + NODE_WIDTH + GAP,
+            y: textNode.y,
+            prompt: textNode.prompt || '',
+            status: NodeStatus.IDLE,
+            model: 'Banana Pro',
+            aspectRatio: 'Auto',
+            resolution: 'Auto',
+            parentIds: [nodeId]
+        };
+
+        // Update text node to editing mode
+        updateNode(nodeId, {
+            textMode: 'editing'
+        });
+
+        // Add image node
+        setNodes(prev => [...prev, imageNode]);
+        setSelectedNodeIds([nodeId]);
+    };
+
     return {
         handleWriteContent,
-        handleTextToVideo
+        handleTextToVideo,
+        handleTextToImage
     };
 };

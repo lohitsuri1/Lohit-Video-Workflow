@@ -32,6 +32,7 @@ interface CanvasNodeProps {
   // Text node callbacks
   onWriteContent?: (nodeId: string) => void;
   onTextToVideo?: (nodeId: string) => void;
+  onTextToImage?: (nodeId: string) => void;
 }
 
 export const CanvasNode: React.FC<CanvasNodeProps> = ({
@@ -53,7 +54,8 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
   onDragStart,
   onDragEnd,
   onWriteContent,
-  onTextToVideo
+  onTextToVideo,
+  onTextToImage
 }) => {
   // ============================================================================
   // STATE
@@ -252,6 +254,7 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
           onDragEnd={onDragEnd}
           onWriteContent={onWriteContent}
           onTextToVideo={onTextToVideo}
+          onTextToImage={onTextToImage}
           onUpdate={onUpdate}
         />
 

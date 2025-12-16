@@ -24,6 +24,7 @@ interface NodeContentProps {
     // Text node callbacks
     onWriteContent?: (nodeId: string) => void;
     onTextToVideo?: (nodeId: string) => void;
+    onTextToImage?: (nodeId: string) => void;
     onUpdate?: (nodeId: string, updates: Partial<NodeData>) => void;
 }
 
@@ -41,6 +42,7 @@ export const NodeContent: React.FC<NodeContentProps> = ({
     onDragEnd,
     onWriteContent,
     onTextToVideo,
+    onTextToImage,
     onUpdate
 }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -242,6 +244,11 @@ export const NodeContent: React.FC<NodeContentProps> = ({
                                     icon={<Video size={16} />}
                                     label="Text to Video"
                                     onClick={() => onTextToVideo?.(data.id)}
+                                />
+                                <TextNodeMenuItem
+                                    icon={<ImageIcon size={16} />}
+                                    label="Text to Image"
+                                    onClick={() => onTextToImage?.(data.id)}
                                 />
                             </div>
                         </div>

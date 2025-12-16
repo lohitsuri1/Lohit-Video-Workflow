@@ -263,7 +263,8 @@ export default function App() {
   // Text node handlers
   const {
     handleWriteContent,
-    handleTextToVideo
+    handleTextToVideo,
+    handleTextToImage
   } = useTextNodeHandlers({ nodes, updateNode, setNodes, setSelectedNodeIds });
 
   // Asset handlers (create asset modal)
@@ -655,6 +656,7 @@ export default function App() {
                 onDragEnd={handleNodeDragEnd}
                 onWriteContent={handleWriteContent}
                 onTextToVideo={handleTextToVideo}
+                onTextToImage={handleTextToImage}
               />
             ))}
           </div>
