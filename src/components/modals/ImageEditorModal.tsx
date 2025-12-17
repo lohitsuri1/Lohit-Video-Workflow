@@ -132,28 +132,37 @@ export const ImageEditorModal: React.FC<ImageEditorModalProps> = ({
     return (
         <div className="fixed inset-0 z-[9999] bg-black flex flex-col">
             {/* Top Bar */}
-            <div className="h-14 flex items-center justify-between px-4 border-b border-neutral-800">
+            <div className="h-14 flex items-center justify-between px-4">
                 <div className="flex items-center gap-3">
-                    <div className="w-6 h-6 rounded bg-blue-500"></div>
+                    <div className="w-6 h-6 rounded flex items-center justify-center text-neutral-400">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                            <circle cx="8.5" cy="8.5" r="1.5" />
+                            <polyline points="21 15 16 10 5 21" />
+                        </svg>
+                    </div>
                     <span className="text-sm text-neutral-300">Image Editor</span>
                 </div>
 
                 <div className="flex items-center gap-2">
-                    <button className="w-8 h-8 rounded hover:bg-neutral-800 flex items-center justify-center text-neutral-400">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M19 12H5M12 19l-7-7 7-7" />
+                    {/* Download Button */}
+                    <button
+                        className="w-10 h-10 rounded hover:bg-neutral-800 flex items-center justify-center text-neutral-400"
+                        title="Download"
+                    >
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="7 10 12 15 17 10" />
+                            <line x1="12" y1="15" x2="12" y2="3" />
                         </svg>
                     </button>
-                    <button className="w-8 h-8 rounded hover:bg-neutral-800 flex items-center justify-center text-neutral-400">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <rect x="3" y="3" width="18" height="18" rx="2" />
-                        </svg>
-                    </button>
+                    {/* Exit Button */}
                     <button
                         onClick={onClose}
-                        className="w-8 h-8 rounded hover:bg-neutral-800 flex items-center justify-center text-neutral-400"
+                        className="w-10 h-10 rounded hover:bg-neutral-800 flex items-center justify-center text-neutral-400"
+                        title="Exit Image Editor"
                     >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <path d="M18 6L6 18M6 6l12 12" />
                         </svg>
                     </button>
@@ -180,58 +189,154 @@ export const ImageEditorModal: React.FC<ImageEditorModalProps> = ({
             <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3 w-full max-w-6xl px-4 pointer-events-none">
 
                 {/* Floating Tools Palette */}
-                <div className="bg-[#222] bg-opacity-95 backdrop-blur-sm rounded-lg border border-neutral-700 p-1 flex items-center gap-1 shadow-2xl pointer-events-auto">
-                    <button className="w-8 h-8 rounded hover:bg-neutral-700 flex items-center justify-center bg-blue-600 text-white">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z" />
+                <div className="bg-[#2a2a2a] bg-opacity-95 backdrop-blur-sm rounded-xl border border-neutral-600 px-2 py-1.5 flex items-center gap-1 shadow-2xl pointer-events-auto">
+                    {/* Drawing Mode (Pen) */}
+                    <button
+                        className="w-9 h-9 rounded-lg hover:bg-neutral-700 flex items-center justify-center text-neutral-400 transition-colors"
+                        title="Drawing Mode"
+                    >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
                         </svg>
                     </button>
-                    <div className="w-px h-5 bg-neutral-700 mx-1"></div>
-                    <button className="w-8 h-8 rounded hover:bg-neutral-700 flex items-center justify-center text-neutral-400">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <rect x="3" y="3" width="18" height="18" rx="2" />
+
+                    {/* Arrow Tool */}
+                    <button
+                        className="w-9 h-9 rounded-lg hover:bg-neutral-700 flex items-center justify-center text-neutral-400 transition-colors"
+                        title="Arrow"
+                    >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M5 12h14M12 5l7 7-7 7" />
                         </svg>
                     </button>
-                    <button className="w-8 h-8 rounded hover:bg-neutral-700 flex items-center justify-center text-neutral-400">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+
+                    {/* Brush Tool */}
+                    <button
+                        className="w-9 h-9 rounded-lg hover:bg-neutral-700 flex items-center justify-center text-neutral-400 transition-colors"
+                        title="Brush"
+                    >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M18.37 2.63 14 7l-1.59-1.59a2 2 0 0 0-2.82 0L8 7l9 9 1.59-1.59a2 2 0 0 0 0-2.82L17 10l4.37-4.37a2.12 2.12 0 1 0-3-3Z" />
+                            <path d="M9 8c-2 3-4 3.5-7 4l8 10c2-1 6-5 6-7" />
+                            <path d="M14.5 17.5 4.5 15" />
                         </svg>
                     </button>
-                    <button className="w-8 h-8 rounded hover:bg-neutral-700 flex items-center justify-center text-neutral-400">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+
+                    {/* Text Tool */}
+                    <button
+                        className="w-9 h-9 rounded-lg hover:bg-neutral-700 flex items-center justify-center text-neutral-400 transition-colors"
+                        title="Add Text"
+                    >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M4 7V4h16v3" />
+                            <path d="M9 20h6" />
+                            <path d="M12 4v16" />
                         </svg>
                     </button>
-                    <div className="w-px h-5 bg-neutral-700 mx-1"></div>
-                    <button className="w-8 h-8 rounded hover:bg-neutral-700 flex items-center justify-center text-neutral-400">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+
+                    {/* Crop Tool */}
+                    <button
+                        className="w-9 h-9 rounded-lg hover:bg-neutral-700 flex items-center justify-center text-neutral-400 transition-colors"
+                        title="Crop"
+                    >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M6 2v4" />
+                            <path d="M18 22v-4" />
+                            <path d="M2 6h4" />
+                            <path d="M22 18h-4" />
+                            <rect x="6" y="6" width="12" height="12" />
                         </svg>
                     </button>
-                    <button className="w-8 h-8 rounded hover:bg-neutral-700 flex items-center justify-center text-neutral-400">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+
+                    <div className="w-px h-6 bg-neutral-600 mx-1"></div>
+
+                    {/* Undo */}
+                    <button
+                        className="w-9 h-9 rounded-lg hover:bg-neutral-700 flex items-center justify-center text-neutral-400 transition-colors"
+                        title="Undo"
+                    >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M3 7v6h6" />
+                            <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
                         </svg>
                     </button>
-                    <button className="w-8 h-8 rounded hover:bg-neutral-700 flex items-center justify-center text-neutral-400">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <circle cx="12" cy="12" r="1" />
-                            <circle cx="12" cy="5" r="1" />
-                            <circle cx="12" cy="19" r="1" />
+
+                    {/* Redo */}
+                    <button
+                        className="w-9 h-9 rounded-lg hover:bg-neutral-700 flex items-center justify-center text-neutral-400 transition-colors"
+                        title="Redo"
+                    >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M21 7v6h-6" />
+                            <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13" />
                         </svg>
                     </button>
                 </div>
 
                 {/* Prompt Bar - Single Row Layout */}
                 <div className="w-full bg-[#2a2a2a] bg-opacity-95 backdrop-blur-sm rounded-xl border border-neutral-600 shadow-2xl pointer-events-auto flex items-center px-3 py-2.5 gap-3">
-                    {/* Left - Image Icon */}
-                    <button className="w-8 h-8 rounded-lg bg-neutral-700/50 hover:bg-neutral-600 flex items-center justify-center text-neutral-400 transition-colors border border-neutral-600 flex-shrink-0">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                            <circle cx="8.5" cy="8.5" r="1.5" />
-                            <polyline points="21 15 16 10 5 21" />
-                        </svg>
-                    </button>
+                    {/* Left - Model Dropdown */}
+                    <div className="relative flex-shrink-0" ref={modelDropdownRef}>
+                        <button
+                            onClick={() => setShowModelDropdown(!showModelDropdown)}
+                            className="flex items-center gap-1 text-[11px] text-neutral-300 hover:bg-neutral-700 px-2 py-1.5 rounded-md transition-colors border border-neutral-600"
+                        >
+                            {currentModel.provider === 'google' ? (
+                                <Banana size={11} className="text-yellow-400" />
+                            ) : (
+                                <ImageIcon size={11} className="text-cyan-400" />
+                            )}
+                            <span className="font-medium whitespace-nowrap">{currentModel.name}</span>
+                            <ChevronDown size={10} className="opacity-50" />
+                        </button>
+
+                        {showModelDropdown && (
+                            <div className="absolute bottom-full mb-2 left-0 w-48 bg-[#252525] border border-neutral-700 rounded-lg shadow-xl overflow-hidden z-50">
+                                <div className="px-3 py-1.5 text-[10px] font-bold text-neutral-400 uppercase tracking-wider bg-[#1a1a1a] border-b border-neutral-700">
+                                    {hasInputImage ? 'Image → Image' : 'Text → Image'}
+                                </div>
+                                {availableModels.filter(m => m.provider === 'google').length > 0 && (
+                                    <>
+                                        <div className="px-3 py-1.5 text-[10px] font-bold text-neutral-500 uppercase tracking-wider bg-[#1f1f1f]">Google</div>
+                                        {availableModels.filter(m => m.provider === 'google').map(model => (
+                                            <button
+                                                key={model.id}
+                                                onClick={() => handleModelChange(model.id)}
+                                                className={`w-full flex items-center justify-between px-3 py-2 text-xs text-left hover:bg-[#333] transition-colors ${currentModel.id === model.id ? 'text-blue-400' : 'text-neutral-300'}`}
+                                            >
+                                                <span className="flex items-center gap-2">
+                                                    <Banana size={12} className="text-yellow-400" />
+                                                    {model.name}
+                                                </span>
+                                                {currentModel.id === model.id && <Check size={12} />}
+                                            </button>
+                                        ))}
+                                    </>
+                                )}
+                                {availableModels.filter(m => m.provider === 'kling').length > 0 && (
+                                    <>
+                                        <div className="px-3 py-1.5 text-[10px] font-bold text-neutral-500 uppercase tracking-wider bg-[#1f1f1f] border-t border-neutral-700">Kling AI</div>
+                                        {availableModels.filter(m => m.provider === 'kling').map(model => (
+                                            <button
+                                                key={model.id}
+                                                onClick={() => handleModelChange(model.id)}
+                                                className={`w-full flex items-center justify-between px-3 py-2 text-xs text-left hover:bg-[#333] transition-colors ${currentModel.id === model.id ? 'text-blue-400' : 'text-neutral-300'}`}
+                                            >
+                                                <span className="flex items-center gap-2">
+                                                    <ImageIcon size={12} className="text-cyan-400" />
+                                                    {model.name}
+                                                    {(model as any).recommended && (
+                                                        <span className="text-[9px] px-1 py-0.5 bg-green-600/30 text-green-400 rounded">REC</span>
+                                                    )}
+                                                </span>
+                                                {currentModel.id === model.id && <Check size={12} />}
+                                            </button>
+                                        ))}
+                                    </>
+                                )}
+                            </div>
+                        )}
+                    </div>
 
                     {/* Prompt Input - Takes remaining space */}
                     <input
@@ -244,69 +349,6 @@ export const ImageEditorModal: React.FC<ImageEditorModalProps> = ({
 
                     {/* Right - Compact Controls Group */}
                     <div className="flex items-center gap-1.5 flex-shrink-0">
-                        {/* Model Dropdown */}
-                        <div className="relative" ref={modelDropdownRef}>
-                            <button
-                                onClick={() => setShowModelDropdown(!showModelDropdown)}
-                                className="flex items-center gap-1 text-[11px] text-neutral-300 hover:bg-neutral-700 px-2 py-1.5 rounded-md transition-colors"
-                            >
-                                {currentModel.provider === 'google' ? (
-                                    <Banana size={11} className="text-yellow-400" />
-                                ) : (
-                                    <ImageIcon size={11} className="text-cyan-400" />
-                                )}
-                                <span className="font-medium max-w-[80px] truncate">{currentModel.name}</span>
-                                <ChevronDown size={10} className="opacity-50" />
-                            </button>
-
-                            {showModelDropdown && (
-                                <div className="absolute bottom-full mb-2 right-0 w-48 bg-[#252525] border border-neutral-700 rounded-lg shadow-xl overflow-hidden z-50">
-                                    <div className="px-3 py-1.5 text-[10px] font-bold text-neutral-400 uppercase tracking-wider bg-[#1a1a1a] border-b border-neutral-700">
-                                        {hasInputImage ? 'Image → Image' : 'Text → Image'}
-                                    </div>
-                                    {availableModels.filter(m => m.provider === 'google').length > 0 && (
-                                        <>
-                                            <div className="px-3 py-1.5 text-[10px] font-bold text-neutral-500 uppercase tracking-wider bg-[#1f1f1f]">Google</div>
-                                            {availableModels.filter(m => m.provider === 'google').map(model => (
-                                                <button
-                                                    key={model.id}
-                                                    onClick={() => handleModelChange(model.id)}
-                                                    className={`w-full flex items-center justify-between px-3 py-2 text-xs text-left hover:bg-[#333] transition-colors ${currentModel.id === model.id ? 'text-blue-400' : 'text-neutral-300'}`}
-                                                >
-                                                    <span className="flex items-center gap-2">
-                                                        <Banana size={12} className="text-yellow-400" />
-                                                        {model.name}
-                                                    </span>
-                                                    {currentModel.id === model.id && <Check size={12} />}
-                                                </button>
-                                            ))}
-                                        </>
-                                    )}
-                                    {availableModels.filter(m => m.provider === 'kling').length > 0 && (
-                                        <>
-                                            <div className="px-3 py-1.5 text-[10px] font-bold text-neutral-500 uppercase tracking-wider bg-[#1f1f1f] border-t border-neutral-700">Kling AI</div>
-                                            {availableModels.filter(m => m.provider === 'kling').map(model => (
-                                                <button
-                                                    key={model.id}
-                                                    onClick={() => handleModelChange(model.id)}
-                                                    className={`w-full flex items-center justify-between px-3 py-2 text-xs text-left hover:bg-[#333] transition-colors ${currentModel.id === model.id ? 'text-blue-400' : 'text-neutral-300'}`}
-                                                >
-                                                    <span className="flex items-center gap-2">
-                                                        <ImageIcon size={12} className="text-cyan-400" />
-                                                        {model.name}
-                                                        {(model as any).recommended && (
-                                                            <span className="text-[9px] px-1 py-0.5 bg-green-600/30 text-green-400 rounded">REC</span>
-                                                        )}
-                                                    </span>
-                                                    {currentModel.id === model.id && <Check size={12} />}
-                                                </button>
-                                            ))}
-                                        </>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-
                         {/* Aspect Ratio */}
                         <div className="relative" ref={aspectDropdownRef}>
                             <button
