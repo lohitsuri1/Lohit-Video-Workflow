@@ -146,14 +146,15 @@ export const useGeneration = ({ nodes, updateNode }: UseGenerationProps) => {
                     imageModel: node.imageModel
                 });
 
-                // Detect actual image aspect ratio for display and dropdown
-                const { resultAspectRatio, aspectRatio } = await getImageAspectRatio(resultUrl);
+                // Detect actual image dimensions (for display purposes only)
+                const { resultAspectRatio } = await getImageAspectRatio(resultUrl);
 
+                // Keep user's selected aspectRatio - don't overwrite it with detected ratio
                 updateNode(id, {
                     status: NodeStatus.SUCCESS,
                     resultUrl,
                     resultAspectRatio,
-                    aspectRatio,
+                    // Note: aspectRatio is intentionally NOT updated to preserve user's selection
                     errorMessage: undefined
                 });
 

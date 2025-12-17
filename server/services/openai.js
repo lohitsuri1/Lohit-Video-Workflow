@@ -13,11 +13,17 @@ import OpenAI, { toFile } from 'openai';
 // ============================================================================
 
 /**
- * Map aspect ratio to OpenAI size format
+ * Map aspect ratio or size to OpenAI size format
+ * Accepts both pixel sizes (1024x1024) and aspect ratios (1:1)
  * Available sizes: 1024x1024 (square), 1536x1024 (landscape), 1024x1536 (portrait), auto
  */
 function mapAspectRatioToSize(aspectRatio) {
     const sizeMap = {
+        // Pixel sizes (new format for GPT Image 1.5)
+        '1024x1024': '1024x1024',
+        '1536x1024': '1536x1024',
+        '1024x1536': '1024x1536',
+        // Legacy aspect ratio mappings
         '1:1': '1024x1024',
         '16:9': '1536x1024',
         '9:16': '1024x1536',

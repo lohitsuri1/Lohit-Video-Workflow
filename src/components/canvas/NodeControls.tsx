@@ -69,7 +69,8 @@ const IMAGE_MODELS = [
         supportsMultiImage: true,
         recommended: true,
         resolutions: ["Auto", "1K", "2K", "4K"],
-        aspectRatios: ["Auto", "1:1", "9:16", "16:9"]
+        // OpenAI uses exact pixel sizes, not aspect ratios
+        aspectRatios: ["Auto", "1024x1024", "1536x1024", "1024x1536"]
     },
     {
         id: 'gemini-pro',
@@ -687,9 +688,6 @@ const NodeControlsComponent: React.FC<NodeControlsProps> = ({
                             {isVideoNode && <Monitor size={12} className="text-green-400" />}
                             {!isVideoNode && <Crop size={12} className="text-blue-400" />}
                             {data.type === NodeType.VIDEO && currentSizeLabel === 'Auto' ? 'Auto' : currentSizeLabel}
-                            {currentSizeLabel === 'Auto' && data.type !== NodeType.VIDEO && (
-                                <span className="text-[10px] text-neutral-400 ml-0.5 opacity-50">16:9</span>
-                            )}
                         </button>
 
                         {/* Dropdown Menu */}
