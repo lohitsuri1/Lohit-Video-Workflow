@@ -31,12 +31,17 @@ const LIBRARY_ASSETS_DIR = path.join(LIBRARY_DIR, 'assets');
     }
 });
 
-// Serve static assets from library
-app.use('/library', express.static(LIBRARY_DIR));
-
-
+// Enable CORS for all routes (must come before static file serving)
 app.use(cors());
 app.use(express.json({ limit: '100mb' }));
+
+// Serve static assets from library with CORS headers for cross-origin image access
+app.use('/library', (req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    next();
+}, express.static(LIBRARY_DIR));
+
 
 const API_KEY = process.env.GEMINI_API_KEY;
 

@@ -20,6 +20,7 @@ import { useImageEditorDrawing } from '../../hooks/useImageEditorDrawing';
 import { useImageEditorArrows, drawArrowWithStyle } from '../../hooks/useImageEditorArrows';
 import { useImageEditorSelection } from '../../hooks/useImageEditorSelection';
 import { useImageEditorText } from '../../hooks/useImageEditorText';
+import { useImageEditorCrop } from '../../hooks/useImageEditorCrop';
 
 // Sub-components
 import { DrawingToolbar } from './imageEditor/DrawingToolbar';
@@ -108,6 +109,21 @@ export const ImageEditorModal: React.FC<ImageEditorModalProps> = ({
         setElements
     });
 
+    // Crop state and local image URL for showing cropped result
+    const [localImageUrl, setLocalImageUrl] = useState<string | undefined>(imageUrl);
+
+    const handleCropApply = (croppedImageDataUrl: string) => {
+        // Update local preview and save to node
+        setLocalImageUrl(croppedImageDataUrl);
+        onUpdate(nodeId, { resultUrl: croppedImageDataUrl });
+    };
+
+    const crop = useImageEditorCrop({
+        imageRef,
+        saveState,
+        onCropApply: handleCropApply
+    });
+
     const currentModel = IMAGE_MODELS.find(m => m.id === selectedModel) || IMAGE_MODELS[0];
     const hasInputImage = !!imageUrl;
 
@@ -119,7 +135,8 @@ export const ImageEditorModal: React.FC<ImageEditorModalProps> = ({
         setSelectedModel(initialModel || 'gemini-pro');
         setSelectedAspectRatio(initialAspectRatio || 'Auto');
         setSelectedResolution(initialResolution || '1K');
-    }, [initialPrompt, initialModel, initialAspectRatio, initialResolution]);
+        setLocalImageUrl(imageUrl);
+    }, [initialPrompt, initialModel, initialAspectRatio, initialResolution, imageUrl]);
 
     // --- Handlers ---
 
@@ -224,11 +241,11 @@ export const ImageEditorModal: React.FC<ImageEditorModalProps> = ({
 
                 {/* Canvas Area */}
                 <div className="flex-1 flex items-center justify-center bg-black p-8">
-                    {imageUrl ? (
+                    {localImageUrl ? (
                         <div ref={imageContainerRef} className="relative">
                             <img
                                 ref={imageRef}
-                                src={imageUrl}
+                                src={localImageUrl}
                                 alt="Editing"
                                 className="max-w-full max-h-full object-contain"
                                 onLoad={(e) => {
@@ -408,6 +425,114 @@ export const ImageEditorModal: React.FC<ImageEditorModalProps> = ({
                                     })}
                                 </svg>
                             )}
+                            {/* Crop Overlay */}
+                            {crop.isCropMode && crop.cropRect && (
+                                <div
+                                    className="absolute inset-0"
+                                    style={{ cursor: crop.isDragging ? 'grabbing' : 'default' }}
+                                    onMouseDown={crop.handleCropMouseDown}
+                                >
+                                    {/* Dimmed overlay outside crop area */}
+                                    <svg className="absolute inset-0" style={{ width: '100%', height: '100%' }}>
+                                        <defs>
+                                            <mask id="cropMask">
+                                                <rect width="100%" height="100%" fill="white" />
+                                                <rect
+                                                    x={crop.cropRect.x}
+                                                    y={crop.cropRect.y}
+                                                    width={crop.cropRect.width}
+                                                    height={crop.cropRect.height}
+                                                    fill="black"
+                                                />
+                                            </mask>
+                                        </defs>
+                                        <rect
+                                            width="100%"
+                                            height="100%"
+                                            fill="rgba(0, 0, 0, 0.6)"
+                                            mask="url(#cropMask)"
+                                        />
+                                        {/* Crop selection border */}
+                                        <rect
+                                            x={crop.cropRect.x}
+                                            y={crop.cropRect.y}
+                                            width={crop.cropRect.width}
+                                            height={crop.cropRect.height}
+                                            fill="none"
+                                            stroke="white"
+                                            strokeWidth="2"
+                                            strokeDasharray="5,5"
+                                        />
+                                        {/* Corner handles */}
+                                        {/* NW */}
+                                        <rect
+                                            x={crop.cropRect.x - 5}
+                                            y={crop.cropRect.y - 5}
+                                            width="10"
+                                            height="10"
+                                            fill="white"
+                                            stroke="#3b82f6"
+                                            strokeWidth="2"
+                                            style={{ cursor: 'nwse-resize' }}
+                                        />
+                                        {/* NE */}
+                                        <rect
+                                            x={crop.cropRect.x + crop.cropRect.width - 5}
+                                            y={crop.cropRect.y - 5}
+                                            width="10"
+                                            height="10"
+                                            fill="white"
+                                            stroke="#3b82f6"
+                                            strokeWidth="2"
+                                            style={{ cursor: 'nesw-resize' }}
+                                        />
+                                        {/* SW */}
+                                        <rect
+                                            x={crop.cropRect.x - 5}
+                                            y={crop.cropRect.y + crop.cropRect.height - 5}
+                                            width="10"
+                                            height="10"
+                                            fill="white"
+                                            stroke="#3b82f6"
+                                            strokeWidth="2"
+                                            style={{ cursor: 'nesw-resize' }}
+                                        />
+                                        {/* SE */}
+                                        <rect
+                                            x={crop.cropRect.x + crop.cropRect.width - 5}
+                                            y={crop.cropRect.y + crop.cropRect.height - 5}
+                                            width="10"
+                                            height="10"
+                                            fill="white"
+                                            stroke="#3b82f6"
+                                            strokeWidth="2"
+                                            style={{ cursor: 'nwse-resize' }}
+                                        />
+                                    </svg>
+                                    {/* Crop Action Buttons */}
+                                    <div
+                                        className="absolute flex gap-2"
+                                        style={{
+                                            left: crop.cropRect.x + crop.cropRect.width / 2,
+                                            top: crop.cropRect.y + crop.cropRect.height + 16,
+                                            transform: 'translateX(-50%)'
+                                        }}
+                                    >
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); crop.cancelCrop(); }}
+                                            className="px-3 py-1.5 bg-neutral-700 hover:bg-neutral-600 text-white rounded-lg text-sm font-medium transition-colors"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); crop.applyCrop(); }}
+                                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors"
+                                        >
+                                            Apply
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     ) : (
                         <div className="w-[600px] h-[400px] bg-neutral-100 rounded flex items-center justify-center">
@@ -429,6 +554,9 @@ export const ImageEditorModal: React.FC<ImageEditorModalProps> = ({
                     setIsArrowMode={arrows.setIsArrowMode}
                     isTextMode={text.isTextMode}
                     setIsTextMode={text.setIsTextMode}
+                    isCropMode={crop.isCropMode}
+                    setIsCropMode={crop.setIsCropMode}
+                    onCropModeEnter={crop.initializeCropRect}
                     setShowToolSettings={drawing.setShowToolSettings}
                     setSelectedElementId={selection.setSelectedElementId}
                     setDrawingTool={drawing.setDrawingTool}

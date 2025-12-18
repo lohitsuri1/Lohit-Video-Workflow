@@ -21,6 +21,9 @@ interface BottomToolbarProps {
     setIsArrowMode: (mode: boolean) => void;
     isTextMode: boolean;
     setIsTextMode: (mode: boolean) => void;
+    isCropMode: boolean;
+    setIsCropMode: (mode: boolean) => void;
+    onCropModeEnter: () => void;
     // Mode helpers
     setShowToolSettings: (show: boolean) => void;
     setSelectedElementId: (id: string | null) => void;
@@ -46,6 +49,9 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
     setIsArrowMode,
     isTextMode,
     setIsTextMode,
+    isCropMode,
+    setIsCropMode,
+    onCropModeEnter,
     setShowToolSettings,
     setSelectedElementId,
     setDrawingTool,
@@ -63,6 +69,7 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
             setIsDrawingMode(false);
             setIsArrowMode(false);
             setIsTextMode(false);
+            setIsCropMode(false);
             setShowToolSettings(false);
             setShowTextSettings(false);
         }
@@ -78,6 +85,7 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
             setIsArrowMode(false);
             setIsSelectMode(false);
             setIsTextMode(false);
+            setIsCropMode(false);
         }
     };
 
@@ -87,6 +95,7 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
             setIsDrawingMode(false);
             setIsSelectMode(false);
             setIsTextMode(false);
+            setIsCropMode(false);
             setShowToolSettings(false);
             setShowTextSettings(false);
         }
@@ -98,10 +107,24 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
             setIsDrawingMode(false);
             setIsSelectMode(false);
             setIsArrowMode(false);
+            setIsCropMode(false);
             setShowToolSettings(false);
             setShowTextSettings(true);
         } else {
             setShowTextSettings(false);
+        }
+    };
+
+    const handleCropModeClick = () => {
+        setIsCropMode(!isCropMode);
+        if (!isCropMode) {
+            setIsDrawingMode(false);
+            setIsSelectMode(false);
+            setIsArrowMode(false);
+            setIsTextMode(false);
+            setShowToolSettings(false);
+            setShowTextSettings(false);
+            onCropModeEnter();
         }
     };
 
@@ -168,7 +191,11 @@ export const BottomToolbar: React.FC<BottomToolbarProps> = ({
 
             {/* Crop Tool */}
             <button
-                className="w-9 h-9 rounded-lg hover:bg-neutral-700 flex items-center justify-center text-neutral-400 transition-colors"
+                onClick={handleCropModeClick}
+                className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors ${isCropMode
+                    ? 'bg-blue-600 text-white'
+                    : 'hover:bg-neutral-700 text-neutral-400'
+                    }`}
                 title="Crop"
             >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
