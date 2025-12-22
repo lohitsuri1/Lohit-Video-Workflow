@@ -493,6 +493,18 @@ const NodeControlsComponent: React.FC<NodeControlsProps> = ({
                 </div>
             )}
 
+            {/* Motion Control Warning - when motion mode detected but no character image */}
+            {isVideoNode && videoGenerationMode === 'motion-control' && imageInputCount === 0 && (
+                <div className="text-amber-400 text-xs mb-2 p-2 bg-amber-900/20 rounded border border-amber-700/50 flex items-start gap-2">
+                    <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <span>
+                        <strong>Motion Control</strong> requires a character image. Please connect an Image node to define the character appearance.
+                    </span>
+                </div>
+            )}
+
             {/* Controls */}
             <div className="flex items-center justify-between relative">
                 <div className="flex items-center gap-2">
