@@ -111,8 +111,8 @@ export const NodeContent: React.FC<NodeContentProps> = ({
                 />
             )}
 
-            {/* Result View */}
-            {isSuccess && data.resultUrl ? (
+            {/* Result View - Show when successful OR when regenerating (loading with existing content) */}
+            {(isSuccess || isLoading) && data.resultUrl ? (
                 <div
                     className={`relative w-full bg-black group/image ${!selected ? '' : 'rounded-xl overflow-hidden'}`}
                     style={getAspectRatioStyle()}
@@ -121,6 +121,14 @@ export const NodeContent: React.FC<NodeContentProps> = ({
                         <video src={data.resultUrl} controls loop className="w-full h-full object-cover" />
                     ) : (
                         <img src={data.resultUrl} alt="Generated" className="w-full h-full object-cover pointer-events-none" />
+                    )}
+
+                    {/* Regenerating Overlay - Shows when loading with existing content */}
+                    {isLoading && (
+                        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center z-20">
+                            <Loader2 size={40} className="animate-spin text-blue-400" />
+                            <span className="mt-3 text-sm text-white font-medium">Regenerating...</span>
+                        </div>
                     )}
 
                     {/* Overlay Actions - z-10 to appear above video controls */}

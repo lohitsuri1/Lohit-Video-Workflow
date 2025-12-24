@@ -138,7 +138,7 @@ export const useGeneration = ({ nodes, updateNode }: UseGenerationProps) => {
                 }
 
                 // Generate image with all parent images
-                const resultUrl = await generateImage({
+                const rawResultUrl = await generateImage({
                     prompt: combinedPrompt,
                     aspectRatio: node.aspectRatio,
                     resolution: node.resolution,
@@ -146,6 +146,10 @@ export const useGeneration = ({ nodes, updateNode }: UseGenerationProps) => {
                     imageModel: node.imageModel,
                     nodeId: id
                 });
+
+                // Add cache-busting parameter to force browser to fetch new image
+                // (Backend uses nodeId as filename, so URL is the same for regenerated images)
+                const resultUrl = `${rawResultUrl}?t=${Date.now()}`;
 
                 // Detect actual image dimensions (for display purposes only)
                 const { resultAspectRatio } = await getImageAspectRatio(resultUrl);
@@ -248,7 +252,7 @@ export const useGeneration = ({ nodes, updateNode }: UseGenerationProps) => {
                 }
 
                 // Generate video
-                const resultUrl = await generateVideo({
+                const rawResultUrl = await generateVideo({
                     prompt: combinedPrompt,
                     imageBase64,
                     lastFrameBase64,
@@ -259,6 +263,10 @@ export const useGeneration = ({ nodes, updateNode }: UseGenerationProps) => {
                     motionReferenceUrl,
                     nodeId: id
                 });
+
+                // Add cache-busting parameter to force browser to fetch new video
+                // (Backend uses nodeId as filename, so URL is the same for regenerated videos)
+                const resultUrl = `${rawResultUrl}?t=${Date.now()}`;
 
                 // Extract last frame for chaining
                 const lastFrame = await extractVideoLastFrame(resultUrl);

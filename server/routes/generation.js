@@ -133,19 +133,22 @@ router.post('/generate-image', async (req, res) => {
             });
         }
 
-        // Save to library
-        const saved = saveBufferToFile(imageBuffer, IMAGES_DIR, 'img', imageFormat, nodeId);
+        // Save to library - use unique filename to preserve previous generations
+        const saved = saveBufferToFile(imageBuffer, IMAGES_DIR, 'img', imageFormat);
 
-        // Save metadata
+        // Determine metadata ID: use nodeId for recovery if available, otherwise use file ID
+        const metadataId = nodeId || saved.id;
+
+        // Save metadata (id must match the metadata filename for delete to work)
         const metadata = {
-            id: saved.id,
+            id: metadataId,  // Must match the filename for delete API to find it
             filename: saved.filename,
             prompt: prompt,
             model: imageModel || 'gemini-pro',
             createdAt: new Date().toISOString(),
             type: 'images'
         };
-        fs.writeFileSync(path.join(IMAGES_DIR, `${saved.id}.json`), JSON.stringify(metadata, null, 2));
+        fs.writeFileSync(path.join(IMAGES_DIR, `${metadataId}.json`), JSON.stringify(metadata, null, 2));
 
         console.log(`Image saved: ${saved.url} (model: ${imageModel || 'gemini-pro'})`);
         return res.json({ resultUrl: saved.url });
@@ -287,12 +290,15 @@ router.post('/generate-video', async (req, res) => {
             });
         }
 
-        // Save to library
-        const saved = saveBufferToFile(videoBuffer, VIDEOS_DIR, 'vid', 'mp4', nodeId);
+        // Save to library - use unique filename to preserve previous generations
+        const saved = saveBufferToFile(videoBuffer, VIDEOS_DIR, 'vid', 'mp4');
 
-        // Save metadata
+        // Determine metadata ID: use nodeId for recovery if available, otherwise use file ID
+        const metadataId = nodeId || saved.id;
+
+        // Save metadata (id must match the metadata filename for delete to work)
         const metadata = {
-            id: saved.id,
+            id: metadataId,  // Must match the filename for delete API to find it
             filename: saved.filename,
             prompt: prompt,
             model: videoModel || 'veo-3.1',
@@ -301,7 +307,7 @@ router.post('/generate-video', async (req, res) => {
             createdAt: new Date().toISOString(),
             type: 'videos'
         };
-        fs.writeFileSync(path.join(VIDEOS_DIR, `${saved.id}.json`), JSON.stringify(metadata, null, 2));
+        fs.writeFileSync(path.join(VIDEOS_DIR, `${metadataId}.json`), JSON.stringify(metadata, null, 2));
 
         console.log(`Video saved: ${saved.url} (model: ${videoModel || 'veo-3.1'})`);
         return res.json({ resultUrl: saved.url });

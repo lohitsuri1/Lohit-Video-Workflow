@@ -665,12 +665,33 @@ app.delete('/api/assets/:type/:id', async (req, res) => {
         }
 
         const targetDir = type === 'images' ? IMAGES_DIR : VIDEOS_DIR;
-        const ext = type === 'images' ? 'png' : 'mp4';
-        const assetPath = path.join(targetDir, `${id}.${ext}`);
         const metaPath = path.join(targetDir, `${id}.json`);
 
-        if (fs.existsSync(assetPath)) fs.unlinkSync(assetPath);
-        if (fs.existsSync(metaPath)) fs.unlinkSync(metaPath);
+        // Read metadata to get the actual filename (may differ from ID)
+        let assetFilename = null;
+        if (fs.existsSync(metaPath)) {
+            try {
+                const metadata = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+                assetFilename = metadata.filename;
+            } catch (e) {
+                console.warn(`Could not read metadata for ${id}:`, e.message);
+            }
+        }
+
+        // Delete the media file using filename from metadata
+        if (assetFilename) {
+            const assetPath = path.join(targetDir, assetFilename);
+            if (fs.existsSync(assetPath)) {
+                fs.unlinkSync(assetPath);
+                console.log(`Deleted asset file: ${assetPath}`);
+            }
+        }
+
+        // Delete the metadata file
+        if (fs.existsSync(metaPath)) {
+            fs.unlinkSync(metaPath);
+            console.log(`Deleted metadata file: ${metaPath}`);
+        }
 
         res.json({ success: true });
     } catch (error) {
