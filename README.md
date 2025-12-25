@@ -16,6 +16,7 @@ A modern, AI-powered canvas application for generating and manipulating images a
 - **🤖 Multi-Model AI Generation** - GPT Image 1.5, Gemini Pro, Kling V1-V2.5 for images
 - **🎬 Multi-Model Video Generation** - Veo 3.1, Kling V1-V2.6, Hailuo 2.3/O2 for videos
 - **💃 Motion Control** - Transfer motion from reference videos to character images (Kling V2.6 via Fal.ai)
+- **📥 TikTok Import** - Download TikTok videos without watermark for use as motion references
 - **🖼️ Image-to-Image** - Use reference images for generation
 - **📽️ Frame-to-Frame Video** - Animate between start and end frames
 - **🔗 Smart Node Connections** - Type-aware validation (IMAGE→VIDEO, TEXT→IMAGE, etc.)
@@ -160,6 +161,8 @@ TwitCanva/
 │   │   ├── fal.js                # Fal.ai service (Kling V2.6 Motion Control)
 │   │   ├── hailuo.js             # Hailuo AI (MiniMax) service
 │   │   └── openai.js             # OpenAI GPT Image service
+│   ├── tools/                    # Utility tools (non-AI)
+│   │   └── tiktok.js             # TikTok video downloader
 │   ├── utils/                    # Utility functions
 │   │   └── base64.js             # Base64 encoding helpers
 │   └── agent/                    # LangGraph chat agent
@@ -240,6 +243,24 @@ All generated assets are automatically saved to local folders. **These folders a
 - **Select**: Click on a node to select it
 - **Multi-select**: `Shift + Click` or drag a selection box
 - **Context Menu**: Right-click for additional options
+
+### Tools
+
+Access import tools via the **Wrench** icon in the left toolbar.
+
+#### TikTok Video Import
+
+Download TikTok videos without watermark to use as **motion references** for the Motion Control feature:
+
+1. Click the **Wrench (Tools)** icon in the left toolbar
+2. Select **Import TikTok** from the dropdown menu
+3. Paste a TikTok video URL (tiktok.com, vm.tiktok.com, or vt.tiktok.com)
+4. Click **Import Video** to download
+5. Preview the video and click **Add to Canvas**
+
+> **Tip**: The imported video will appear in your Video History and can be used as a motion reference when generating videos with Kling V2.6 Motion Control. This allows you to transfer dance moves, gestures, or any motion from TikTok videos to your AI-generated characters!
+
+> **Note**: First and last frames are automatically trimmed to remove TikTok watermarks (requires ffmpeg installed on your system).
 
 ## 🔧 Available Scripts
 

@@ -41,7 +41,9 @@ import { HistoryPanel } from './components/HistoryPanel';
 import { ChatPanel, ChatBubble } from './components/ChatPanel';
 import { ImageEditorModal } from './components/modals/ImageEditorModal';
 import { CreateAssetModal } from './components/modals/CreateAssetModal';
+import { TikTokImportModal } from './components/modals/TikTokImportModal';
 import { AssetLibraryPanel } from './components/AssetLibraryPanel';
+import { useTikTokImport } from './hooks/useTikTokImport';
 
 // ============================================================================
 // MAIN COMPONENT
@@ -354,6 +356,19 @@ export default function App() {
     updateNode
   });
 
+  // TikTok Import Tool
+  const {
+    isModalOpen: isTikTokModalOpen,
+    openModal: openTikTokModal,
+    closeModal: closeTikTokModal,
+    handleVideoImported: handleTikTokVideoImported
+  } = useTikTokImport({
+    nodes,
+    setNodes,
+    setSelectedNodeIds,
+    viewport
+  });
+
   // Context menu handlers
   const {
     handleDoubleClick,
@@ -653,6 +668,12 @@ export default function App() {
         onWorkflowsClick={handleWorkflowsClick}
         onHistoryClick={handleHistoryClick}
         onAssetsClick={handleAssetsClick}
+        onTikTokClick={openTikTokModal}
+        onToolsOpen={() => {
+          closeWorkflowPanel();
+          closeHistoryPanel();
+          closeAssetLibrary();
+        }}
       />
 
       {/* Workflow Panel */}
@@ -685,6 +706,13 @@ export default function App() {
         onClose={() => setIsCreateAssetModalOpen(false)}
         nodeToSnapshot={nodeToSnapshot}
         onSave={handleSaveAssetToLibrary}
+      />
+
+      {/* TikTok Import Modal */}
+      <TikTokImportModal
+        isOpen={isTikTokModalOpen}
+        onClose={closeTikTokModal}
+        onVideoImported={handleTikTokVideoImported}
       />
 
       {/* Agent Chat */}

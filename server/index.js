@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url';
 import crypto from 'crypto';
 import chatAgent from './agent/index.js';
 import generationRoutes from './routes/generation.js';
+import { processTikTokVideo, isValidTikTokUrl } from './tools/tiktok.js';
 
 dotenv.config();
 
@@ -697,6 +698,58 @@ app.delete('/api/assets/:type/:id', async (req, res) => {
     } catch (error) {
         console.error('Delete asset error:', error);
         res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================================================
+// TIKTOK IMPORT API
+// ============================================================================
+
+/**
+ * Import a TikTok video without watermark
+ * Downloads the video, optionally trims first/last frames, saves to library
+ */
+app.post('/api/tiktok/import', async (req, res) => {
+    try {
+        const { url, enableTrim = true } = req.body;
+
+        if (!url) {
+            return res.status(400).json({ error: 'TikTok URL is required' });
+        }
+
+        if (!isValidTikTokUrl(url)) {
+            return res.status(400).json({ error: 'Invalid TikTok URL format. Please provide a valid TikTok video URL.' });
+        }
+
+        console.log(`[TikTok API] Processing import request for: ${url}`);
+
+        const result = await processTikTokVideo(url, VIDEOS_DIR, enableTrim);
+
+        res.json(result);
+    } catch (error) {
+        console.error('[TikTok API] Import error:', error);
+        res.status(500).json({
+            error: error.message || 'Failed to import TikTok video',
+            details: error.toString()
+        });
+    }
+});
+
+/**
+ * Validate a TikTok URL without downloading
+ */
+app.post('/api/tiktok/validate', async (req, res) => {
+    try {
+        const { url } = req.body;
+
+        if (!url) {
+            return res.status(400).json({ valid: false, error: 'URL is required' });
+        }
+
+        const valid = isValidTikTokUrl(url);
+        res.json({ valid, url });
+    } catch (error) {
+        res.status(500).json({ valid: false, error: error.message });
     }
 });
 
