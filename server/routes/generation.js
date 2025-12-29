@@ -51,8 +51,26 @@ router.post('/generate-image', async (req, res) => {
 
             let klingImageUrl;
 
-            // Use Multi-Image API when multiple images are provided
-            if (resolvedImages && resolvedImages.length > 1) {
+            // Determine which API to use based on model and reference images:
+            // - kling-v1-5: Uses standard API with image_reference parameter
+            // - kling-v2, kling-v2-1: Use Multi-Image API (image_reference not supported)
+            const isV2Model = imageModel === 'kling-v2' || imageModel === 'kling-v2-1' || imageModel === 'kling-v2-new';
+            const hasReferenceImages = resolvedImages && resolvedImages.length > 0;
+
+            if (hasReferenceImages && isV2Model) {
+                // V2 models: Use Multi-Image API for image-to-image
+                console.log(`Using Kling Multi-Image API for ${imageModel} with ${resolvedImages.length} subject image(s)`);
+                klingImageUrl = await generateKlingMultiImage({
+                    prompt,
+                    subjectImages: resolvedImages,
+                    modelId: imageModel,
+                    aspectRatio,
+                    resolution,
+                    accessKey: KLING_ACCESS_KEY,
+                    secretKey: KLING_SECRET_KEY
+                });
+            } else if (hasReferenceImages && resolvedImages.length > 1) {
+                // Multiple images with non-V2 model: Use Multi-Image API
                 console.log(`Using Kling Multi-Image API with ${resolvedImages.length} subject images`);
                 klingImageUrl = await generateKlingMultiImage({
                     prompt,
@@ -64,7 +82,7 @@ router.post('/generate-image', async (req, res) => {
                     secretKey: KLING_SECRET_KEY
                 });
             } else {
-                // Standard single image or text-to-image generation
+                // V1.5 or text-to-image: Use standard API (V1.5 supports image_reference)
                 klingImageUrl = await generateKlingImage({
                     prompt,
                     imageBase64: resolvedImages,

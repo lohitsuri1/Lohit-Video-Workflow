@@ -721,6 +721,12 @@ export async function generateKlingImage({ prompt, imageBase64, modelId, aspectR
     if (imageBase64) {
         const firstImage = Array.isArray(imageBase64) ? imageBase64[0] : imageBase64;
         body.image = extractRawBase64(firstImage);
+
+        // kling-v1-5 requires image_reference when using a reference image
+        // Options: 'subject' (character feature reference) or 'face' (appearance reference)
+        if (modelName === 'kling-v1-5') {
+            body.image_reference = 'subject';
+        }
     }
 
     console.log(`Kling Image Gen: Using model ${modelName}, aspect ratio: ${mappedRatio}, has reference: ${!!imageBase64}`);

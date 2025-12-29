@@ -563,7 +563,14 @@ export default function App() {
   }, [nodes, groups, isDragging]);
 
   // Apply history state when undo/redo is triggered
+  // IMPORTANT: Don't revert nodes if any node is in LOADING status (generation in progress)
   useEffect(() => {
+    // Skip if any node is currently generating - don't interrupt the loading state
+    const hasLoadingNode = nodes.some(n => n.status === NodeStatus.LOADING);
+    if (hasLoadingNode) {
+      return;
+    }
+
     if (historyState.nodes !== nodes) {
       isApplyingHistory.current = true;
       setNodes(historyState.nodes);

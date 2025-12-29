@@ -60,8 +60,11 @@ const VIDEO_MODELS = [
 ];
 
 // Image model versions with metadata
-// supportsImageToImage: Can use a single reference image
-// supportsMultiImage: Can use multiple reference images (2-4)
+// supportsImageToImage: Can use a single reference image (for image-to-image transformation)
+// supportsMultiImage: Can use multiple reference images (2-4) via Multi-Image API
+// Note: Kling V1 and V2-new don't support reference images in standard API
+// Note: Kling V1.5 is the only Kling model supporting single-image reference via image_reference
+// Note: Kling V2/V2.1 only support references via Multi-Image API
 // aspectRatios: Supported aspect ratios for the model
 const IMAGE_MODELS = [
     {
@@ -88,7 +91,7 @@ const IMAGE_MODELS = [
         id: 'kling-v1',
         name: 'Kling V1',
         provider: 'kling',
-        supportsImageToImage: true,
+        supportsImageToImage: false, // V1 doesn't support image_reference
         supportsMultiImage: false,
         resolutions: ["1K", "2K"],
         aspectRatios: ["Auto", "1:1", "9:16", "16:9", "3:4", "4:3", "3:2", "2:3", "21:9"]
@@ -97,7 +100,7 @@ const IMAGE_MODELS = [
         id: 'kling-v1-5',
         name: 'Kling V1.5',
         provider: 'kling',
-        supportsImageToImage: true,
+        supportsImageToImage: true, // V1.5 supports image_reference for subject/face
         supportsMultiImage: false,
         resolutions: ["1K", "2K"],
         aspectRatios: ["Auto", "1:1", "9:16", "16:9", "3:4", "4:3", "3:2", "2:3", "21:9"]
@@ -106,8 +109,8 @@ const IMAGE_MODELS = [
         id: 'kling-v2',
         name: 'Kling V2',
         provider: 'kling',
-        supportsImageToImage: true,
-        supportsMultiImage: true,
+        supportsImageToImage: false, // V2 requires Multi-Image API for references
+        supportsMultiImage: true,    // Use Multi-Image API with subject_image_list
         resolutions: ["1K", "2K"],
         aspectRatios: ["Auto", "1:1", "9:16", "16:9", "3:4", "4:3", "3:2", "2:3", "21:9"]
     },
@@ -115,7 +118,7 @@ const IMAGE_MODELS = [
         id: 'kling-v2-new',
         name: 'Kling V2 New',
         provider: 'kling',
-        supportsImageToImage: true,
+        supportsImageToImage: false, // V2-new doesn't support references
         supportsMultiImage: false,
         resolutions: ["1K", "2K"],
         aspectRatios: ["Auto", "1:1", "9:16", "16:9", "3:4", "4:3", "3:2", "2:3", "21:9"]
@@ -124,8 +127,8 @@ const IMAGE_MODELS = [
         id: 'kling-v2-1',
         name: 'Kling V2.1',
         provider: 'kling',
-        supportsImageToImage: false,
-        supportsMultiImage: true,
+        supportsImageToImage: false, // V2.1 requires Multi-Image API
+        supportsMultiImage: true,    // Use Multi-Image API with subject_image_list
         recommended: true,
         resolutions: ["1K", "2K"],
         aspectRatios: ["Auto", "1:1", "9:16", "16:9", "3:4", "4:3", "3:2", "2:3", "21:9"]
