@@ -214,17 +214,13 @@ export async function generateHailuoVideo({
         hasFirstFrame ? 'I2V (Image-to-Video)' :
             'T2V (Text-to-Video)';
 
-    console.log('Calling Hailuo API with args:', {
-        model: modelName,
-        mode: mode,
-        prompt: (prompt || '').substring(0, 100) + '...',
-        duration: body.duration,
-        resolution: mappedResolution,
-        aspect_ratio: mappedAspectRatio,
-        has_first_frame: hasFirstFrame,
-        has_last_frame: hasLastFrame,
-        requestedDuration: duration
-    });
+    console.log('=== Hailuo Video Generation ===');
+    console.log('Model:', modelName);
+    console.log('Mode:', mode);
+    console.log('First frame imageBase64 received:', hasFirstFrame ? `Yes (${(imageBase64 || '').substring(0, 50)}...)` : 'No');
+    console.log('Last frame imageBase64 received:', hasLastFrame ? 'Yes' : 'No');
+    console.log('Prompt:', (prompt || '').substring(0, 100) + '...');
+    console.log('Duration:', body.duration, 'Resolution:', mappedResolution, 'Aspect Ratio:', mappedAspectRatio);
 
     // Log exact request body (without image data)
     const bodyForLogging = { ...body };

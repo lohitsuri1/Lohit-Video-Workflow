@@ -239,7 +239,8 @@ export const useGeneration = ({ nodes, updateNode }: UseGenerationProps) => {
                         }
                     } else {
                         // Standard mode: get first parent image or video last frame
-                        const parent = nodes.find(n => n.id === node.parentIds![0]);
+                        // Use imageParentIds (filtered to exclude TEXT nodes) instead of raw parentIds
+                        const parent = nodes.find(n => n.id === imageParentIds[0]);
 
                         if (parent?.type === NodeType.VIDEO && parent.lastFrame) {
                             // Use last frame from parent video
