@@ -29,6 +29,7 @@ interface ChatPanelProps {
     userName?: string;
     isDraggingNode?: boolean;
     onNodeDrop?: (nodeId: string, url: string, type: 'image' | 'video') => void;
+    canvasTheme?: 'dark' | 'light';
 }
 
 // ============================================================================
@@ -40,6 +41,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     onClose,
     userName = 'Creator',
     isDraggingNode = false,
+    canvasTheme = 'dark',
 }) => {
     // --- State ---
     const [message, setMessage] = useState('');
@@ -47,6 +49,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     const [attachedMedia, setAttachedMedia] = useState<AttachedMedia[]>([]);
     const [isDragOver, setIsDragOver] = useState(false);
     const [showHistory, setShowHistory] = useState(false);
+
+    // Theme helper
+    const isDark = canvasTheme === 'dark';
 
     // Chat agent hook
     const {
@@ -195,8 +200,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 
     return (
         <div
-            className={`fixed top-0 right-0 w-[400px] h-full bg-[#1a1a1a] border-l flex flex-col z-40 shadow-2xl transition-all duration-200 ${showHighlight ? 'border-cyan-500 border-2' : 'border-neutral-800'
-                }`}
+            className={`fixed top-0 right-0 w-[400px] h-full border-l flex flex-col z-40 shadow-2xl transition-all duration-300 ${showHighlight ? 'border-cyan-500 border-2' : isDark ? 'border-neutral-800' : 'border-neutral-200'} ${isDark ? 'bg-[#1a1a1a]' : 'bg-white'}`}
             onDragEnter={handleDragEnter}
             onDragLeave={handleDragLeave}
             onDragOver={handleDragOver}
@@ -214,16 +218,16 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 
             {/* History Panel */}
             {showHistory && (
-                <div className="absolute inset-0 bg-[#1a1a1a] z-20 flex flex-col">
+                <div className={`absolute inset-0 z-20 flex flex-col ${isDark ? 'bg-[#1a1a1a]' : 'bg-white'}`}>
                     {/* History Header */}
-                    <div className="flex items-center gap-3 px-4 py-3 border-b border-neutral-800">
+                    <div className={`flex items-center gap-3 px-4 py-3 border-b ${isDark ? 'border-neutral-800' : 'border-neutral-200'}`}>
                         <button
                             onClick={() => setShowHistory(false)}
-                            className="p-1.5 hover:bg-neutral-800 rounded-lg transition-colors text-neutral-400 hover:text-white"
+                            className={`p-1.5 rounded-lg transition-colors ${isDark ? 'hover:bg-neutral-800 text-neutral-400 hover:text-white' : 'hover:bg-neutral-100 text-neutral-500 hover:text-neutral-900'}`}
                         >
                             <ChevronLeft size={18} />
                         </button>
-                        <span className="text-white font-medium text-sm">Chat History</span>
+                        <span className={`font-medium text-sm ${isDark ? 'text-white' : 'text-neutral-900'}`}>Chat History</span>
                     </div>
 
                     {/* History List */}
@@ -246,14 +250,14 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                                         onClick={() => handleLoadSession(session.id)}
                                         role="button"
                                         tabIndex={0}
-                                        className="w-full text-left p-3 bg-neutral-800/50 hover:bg-neutral-800 rounded-xl transition-colors group cursor-pointer"
+                                        className={`w-full text-left p-3 rounded-xl transition-colors group cursor-pointer ${isDark ? 'bg-neutral-800/50 hover:bg-neutral-800' : 'bg-neutral-100 hover:bg-neutral-200'}`}
                                     >
                                         <div className="flex items-start justify-between gap-2">
                                             <div className="flex-1 min-w-0">
-                                                <p className="text-white text-sm font-medium truncate">
+                                                <p className={`text-sm font-medium truncate ${isDark ? 'text-white' : 'text-neutral-900'}`}>
                                                     {session.topic}
                                                 </p>
-                                                <p className="text-neutral-500 text-xs mt-1">
+                                                <p className={`text-xs mt-1 ${isDark ? 'text-neutral-500' : 'text-neutral-400'}`}>
                                                     {session.messageCount} messages · {formatDate(session.updatedAt || session.createdAt)}
                                                 </p>
                                             </div>
@@ -272,7 +276,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                     </div>
 
                     {/* New Chat Button */}
-                    <div className="p-4 border-t border-neutral-800">
+                    <div className={`p-4 border-t ${isDark ? 'border-neutral-800' : 'border-neutral-200'}`}>
                         <button
                             onClick={handleNewChat}
                             className="w-full py-2.5 bg-cyan-500 hover:bg-cyan-400 rounded-xl text-white font-medium text-sm transition-colors flex items-center justify-center gap-2"
@@ -286,10 +290,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
             }
 
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-800">
+            <div className={`flex items-center justify-between px-4 py-3 border-b ${isDark ? 'border-neutral-800' : 'border-neutral-200'}`}>
                 <div className="flex items-center gap-3">
                     {/* Topic or default title */}
-                    <span className="text-white font-medium text-sm truncate max-w-[180px]">
+                    <span className={`font-medium text-sm truncate max-w-[180px] ${isDark ? 'text-white' : 'text-neutral-900'}`}>
                         {topic || (hasMessages ? 'New Chat' : 'ImageIdeas')}
                     </span>
                 </div>
@@ -298,7 +302,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                     {hasMessages && (
                         <button
                             onClick={handleNewChat}
-                            className="p-1.5 hover:bg-neutral-800 rounded-lg transition-colors text-neutral-400 hover:text-white"
+                            className={`p-1.5 rounded-lg transition-colors ${isDark ? 'hover:bg-neutral-800 text-neutral-400 hover:text-white' : 'hover:bg-neutral-100 text-neutral-500 hover:text-neutral-900'}`}
                             title="New Chat"
                         >
                             <Plus size={18} />
@@ -306,14 +310,14 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                     )}
                     <button
                         onClick={() => setShowHistory(true)}
-                        className="p-1.5 hover:bg-neutral-800 rounded-lg transition-colors text-neutral-400 hover:text-white"
+                        className={`p-1.5 rounded-lg transition-colors ${isDark ? 'hover:bg-neutral-800 text-neutral-400 hover:text-white' : 'hover:bg-neutral-100 text-neutral-500 hover:text-neutral-900'}`}
                         title="Chat History"
                     >
                         <History size={18} />
                     </button>
                     <button
                         onClick={onClose}
-                        className="p-1.5 hover:bg-neutral-800 rounded-lg transition-colors text-neutral-400 hover:text-white"
+                        className={`p-1.5 rounded-lg transition-colors ${isDark ? 'hover:bg-neutral-800 text-neutral-400 hover:text-white' : 'hover:bg-neutral-100 text-neutral-500 hover:text-neutral-900'}`}
                     >
                         <X size={18} />
                     </button>
@@ -326,7 +330,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                 {!hasMessages ? (
                     <>
                         {/* Greeting */}
-                        <h1 className="text-2xl font-bold text-white mb-1">
+                        <h1 className={`text-2xl font-bold mb-1 ${isDark ? 'text-white' : 'text-neutral-900'}`}>
                             Hi, {userName}
                         </h1>
                         <p className="text-cyan-400 text-lg mb-6">
@@ -335,21 +339,21 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 
                         {/* Tip Card */}
                         {showTip && (
-                            <div className="bg-neutral-800/50 rounded-2xl p-4 mb-4">
-                                <div className="bg-neutral-700/50 rounded-xl overflow-hidden mb-3 flex items-center justify-center">
+                            <div className={`rounded-2xl p-4 mb-4 ${isDark ? 'bg-neutral-800/50' : 'bg-neutral-100'}`}>
+                                <div className={`rounded-xl overflow-hidden mb-3 flex items-center justify-center ${isDark ? 'bg-neutral-700/50' : 'bg-neutral-200'}`}>
                                     <img
                                         src="/chat-preview.gif"
                                         alt="Drag and drop preview"
                                         className="w-full h-auto object-cover rounded-xl"
                                     />
                                 </div>
-                                <p className="text-neutral-400 text-sm leading-relaxed mb-3">
+                                <p className={`text-sm leading-relaxed mb-3 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
                                     Drag image/video nodes into the chat dialog to unlock advanced features like prompt generation based on node content, providing more inspiration for your creativity~
                                 </p>
                                 <div className="flex justify-end">
                                     <button
                                         onClick={() => setShowTip(false)}
-                                        className="px-4 py-1.5 bg-neutral-700 hover:bg-neutral-600 rounded-lg text-sm text-white transition-colors"
+                                        className={`px-4 py-1.5 rounded-lg text-sm transition-colors ${isDark ? 'bg-neutral-700 hover:bg-neutral-600 text-white' : 'bg-neutral-200 hover:bg-neutral-300 text-neutral-900'}`}
                                     >
                                         Got it
                                     </button>
@@ -373,7 +377,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                         {/* Loading indicator */}
                         {isLoading && (
                             <div className="flex justify-start mb-4">
-                                <div className="bg-neutral-800 rounded-2xl rounded-bl-md px-4 py-3">
+                                <div className={`rounded-2xl rounded-bl-md px-4 py-3 ${isDark ? 'bg-neutral-800' : 'bg-neutral-100'}`}>
                                     <Loader2 className="w-5 h-5 text-cyan-400 animate-spin" />
                                 </div>
                             </div>
@@ -394,8 +398,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
             </div>
 
             {/* Input Area */}
-            <div className="p-4 border-t border-neutral-800">
-                <div className="bg-neutral-800 rounded-2xl p-3">
+            <div className={`p-4 border-t ${isDark ? 'border-neutral-800' : 'border-neutral-200'}`}>
+                <div className={`rounded-2xl p-3 ${isDark ? 'bg-neutral-800' : 'bg-neutral-100'}`}>
                     {/* Attached Media Preview */}
                     {attachedMedia.length > 0 && (
                         <div className="flex flex-wrap gap-2 mb-3">
@@ -429,7 +433,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                         value={message}
                         onChange={(e) => setMessage(e.target.value)}
                         placeholder="Start your journey of inspiration"
-                        className="w-full bg-transparent text-white text-sm placeholder:text-neutral-500 outline-none mb-3 resize-none min-h-[24px] max-h-[120px]"
+                        className={`w-full bg-transparent text-sm outline-none mb-3 resize-none min-h-[24px] max-h-[120px] ${isDark ? 'text-white placeholder:text-neutral-500' : 'text-neutral-900 placeholder:text-neutral-400'}`}
                         rows={1}
                         style={{ scrollbarWidth: 'none' }}
                         disabled={isLoading}
@@ -449,15 +453,15 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                     />
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                            <button className="p-1.5 hover:bg-neutral-700 rounded-lg transition-colors text-neutral-400">
+                            <button className={`p-1.5 rounded-lg transition-colors ${isDark ? 'hover:bg-neutral-700 text-neutral-400' : 'hover:bg-neutral-200 text-neutral-500'}`}>
                                 <Paperclip size={16} />
                             </button>
                         </div>
                         <div className="flex items-center gap-2">
-                            <button className="p-1.5 hover:bg-neutral-700 rounded-lg transition-colors text-neutral-400">
+                            <button className={`p-1.5 rounded-lg transition-colors ${isDark ? 'hover:bg-neutral-700 text-neutral-400' : 'hover:bg-neutral-200 text-neutral-500'}`}>
                                 <Globe size={16} />
                             </button>
-                            <button className="p-1.5 hover:bg-neutral-700 rounded-lg transition-colors text-neutral-400">
+                            <button className={`p-1.5 rounded-lg transition-colors ${isDark ? 'hover:bg-neutral-700 text-neutral-400' : 'hover:bg-neutral-200 text-neutral-500'}`}>
                                 <Settings size={16} />
                             </button>
                             <button

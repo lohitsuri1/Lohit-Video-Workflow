@@ -21,6 +21,7 @@ interface NodeControlsProps {
     onGenerate: (id: string) => void;
     onSelect: (id: string) => void;
     zoom: number;
+    canvasTheme?: 'dark' | 'light';
 }
 
 const IMAGE_RATIOS = [
@@ -144,7 +145,8 @@ const NodeControlsComponent: React.FC<NodeControlsProps> = ({
     onUpdate,
     onGenerate,
     onSelect,
-    zoom
+    zoom,
+    canvasTheme = 'dark'
 }) => {
     const [showAdvanced, setShowAdvanced] = useState(false);
     const [showSizeDropdown, setShowSizeDropdown] = useState(false);
@@ -441,9 +443,12 @@ const NodeControlsComponent: React.FC<NodeControlsProps> = ({
     const effectiveScale = Math.max(zoom, minEffectiveScale);
     const localScale = effectiveScale / zoom;
 
+    // Theme helper
+    const isDark = canvasTheme === 'dark';
+
     return (
         <div
-            className="p-4 bg-[#1a1a1a] border border-neutral-800 rounded-2xl shadow-2xl cursor-default w-full"
+            className={`p-4 rounded-2xl shadow-2xl cursor-default w-full transition-colors duration-300 ${isDark ? 'bg-[#1a1a1a] border border-neutral-800' : 'bg-white border border-neutral-200'}`}
             style={{
                 transform: `scale(${localScale})`,
                 transformOrigin: 'top center',
@@ -455,7 +460,7 @@ const NodeControlsComponent: React.FC<NodeControlsProps> = ({
             {/* Prompt Textarea with Expand Button */}
             <div className="mb-3">
                 <textarea
-                    className="w-full bg-transparent text-sm text-white placeholder-neutral-600 outline-none resize-none font-light"
+                    className={`w-full bg-transparent text-sm outline-none resize-none font-light ${isDark ? 'text-white placeholder-neutral-600' : 'text-neutral-900 placeholder-neutral-400'}`}
                     placeholder={
                         data.type === NodeType.VIDEO && isFrameToFrame && currentVideoModel.provider === 'kling'
                             ? "Prompt optional for Kling frame-to-frame..."
@@ -481,7 +486,7 @@ const NodeControlsComponent: React.FC<NodeControlsProps> = ({
                 <div className="flex justify-end mt-1">
                     <button
                         onClick={() => onUpdate(data.id, { isPromptExpanded: !data.isPromptExpanded })}
-                        className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] text-neutral-500 hover:text-white hover:bg-neutral-700 rounded transition-colors"
+                        className={`flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded transition-colors ${isDark ? 'text-neutral-500 hover:text-white hover:bg-neutral-700' : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-200'}`}
                         title={data.isPromptExpanded ? 'Shrink prompt' : 'Expand prompt'}
                     >
                         {data.isPromptExpanded ? <Shrink size={12} /> : <Expand size={12} />}
@@ -516,7 +521,7 @@ const NodeControlsComponent: React.FC<NodeControlsProps> = ({
                         <div className="relative" ref={modelDropdownRef}>
                             <button
                                 onClick={() => setShowModelDropdown(!showModelDropdown)}
-                                className="flex items-center gap-1.5 text-xs text-neutral-300 hover:bg-neutral-800 px-2 py-1.5 rounded-lg transition-colors"
+                                className="flex items-center gap-1.5 text-xs font-medium bg-[#252525] hover:bg-[#333] border border-neutral-700 text-white px-2.5 py-1.5 rounded-lg transition-colors"
                             >
                                 {currentVideoModel.id === 'veo-3.1' ? (
                                     <GoogleIcon size={12} className="text-white" />
@@ -625,7 +630,7 @@ const NodeControlsComponent: React.FC<NodeControlsProps> = ({
                         <div className="relative" ref={modelDropdownRef}>
                             <button
                                 onClick={() => setShowModelDropdown(!showModelDropdown)}
-                                className="flex items-center gap-1.5 text-xs text-neutral-300 hover:bg-neutral-800 px-2 py-1.5 rounded-lg transition-colors"
+                                className="flex items-center gap-1.5 text-xs font-medium bg-[#252525] hover:bg-[#333] border border-neutral-700 text-white px-2.5 py-1.5 rounded-lg transition-colors"
                             >
                                 {currentImageModel.id === 'google-veo' ? ( // Keeping consistency if there was one, but mainly checking provider
                                     <GoogleIcon size={12} className="text-white" />

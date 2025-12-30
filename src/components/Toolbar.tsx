@@ -36,6 +36,7 @@ interface ToolbarProps {
   onAssetsClick?: (e: React.MouseEvent) => void;
   onTikTokClick?: (e: React.MouseEvent) => void;
   onToolsOpen?: () => void; // Called when tools dropdown opens to close other panels
+  canvasTheme?: 'dark' | 'light';
 }
 
 // ============================================================================
@@ -48,7 +49,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   onHistoryClick,
   onAssetsClick,
   onTikTokClick,
-  onToolsOpen
+  onToolsOpen,
+  canvasTheme = 'dark'
 }) => {
   const [isToolsOpen, setIsToolsOpen] = useState(false);
   const toolsRef = useRef<HTMLDivElement>(null);
@@ -75,10 +77,15 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     callback?.(e);
   };
 
+  // Theme-aware styles
+  const isDark = canvasTheme === 'dark';
+
   return (
-    <div className="fixed left-4 top-1/2 -translate-y-1/2 flex flex-col items-center gap-2 p-1 bg-[#1a1a1a] border border-neutral-800 rounded-full shadow-2xl z-50">
+    <div className={`fixed left-4 top-1/2 -translate-y-1/2 flex flex-col items-center gap-2 p-1 rounded-full shadow-2xl z-50 transition-colors duration-300 ${isDark ? 'bg-[#1a1a1a] border border-neutral-800' : 'bg-white/90 backdrop-blur-sm border border-neutral-200'
+      }`}>
       <button
-        className="w-10 h-10 rounded-full bg-white text-black flex items-center justify-center hover:bg-neutral-200 hover:scale-110 transition-all duration-200 mb-2"
+        className={`w-10 h-10 rounded-full flex items-center justify-center hover:scale-110 transition-all duration-200 mb-2 ${isDark ? 'bg-white text-black hover:bg-neutral-200' : 'bg-neutral-900 text-white hover:bg-neutral-700'
+          }`}
         onClick={onAddClick}
       >
         <Plus size={20} />
@@ -86,21 +93,24 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
       <div className="flex flex-col gap-4 py-2 px-1">
         <button
-          className="text-neutral-400 hover:text-white hover:scale-125 transition-all duration-200"
+          className={`hover:scale-125 transition-all duration-200 ${isDark ? 'text-neutral-400 hover:text-white' : 'text-neutral-500 hover:text-neutral-900'
+            }`}
           onClick={onWorkflowsClick}
           title="My Workflows"
         >
           <LayoutGrid size={20} />
         </button>
         <button
-          className="text-neutral-400 hover:text-white hover:scale-125 transition-all duration-200"
+          className={`hover:scale-125 transition-all duration-200 ${isDark ? 'text-neutral-400 hover:text-white' : 'text-neutral-500 hover:text-neutral-900'
+            }`}
           title="Assets"
           onClick={onAssetsClick}
         >
           <ImageIcon size={20} />
         </button>
         <button
-          className="text-neutral-400 hover:text-white hover:scale-125 transition-all duration-200"
+          className={`hover:scale-125 transition-all duration-200 ${isDark ? 'text-neutral-400 hover:text-white' : 'text-neutral-500 hover:text-neutral-900'
+            }`}
           onClick={onHistoryClick}
           title="History"
         >
@@ -110,7 +120,10 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         {/* Tools Dropdown */}
         <div className="relative" ref={toolsRef}>
           <button
-            className={`text-neutral-400 hover:text-white hover:scale-125 transition-all duration-200 ${isToolsOpen ? 'text-white' : ''}`}
+            className={`hover:scale-125 transition-all duration-200 ${isDark
+                ? `text-neutral-400 hover:text-white ${isToolsOpen ? 'text-white' : ''}`
+                : `text-neutral-500 hover:text-neutral-900 ${isToolsOpen ? 'text-neutral-900' : ''}`
+              }`}
             onClick={() => {
               if (!isToolsOpen) {
                 onToolsOpen?.(); // Close other panels when opening tools
@@ -124,23 +137,25 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
           {/* Dropdown Menu */}
           {isToolsOpen && (
-            <div className="absolute left-10 top-0 bg-[#1a1a1a] border border-neutral-700 rounded-lg shadow-2xl py-2 min-w-[240px] z-50">
+            <div className={`absolute left-10 top-0 rounded-lg shadow-2xl py-2 min-w-[240px] z-50 ${isDark ? 'bg-[#1a1a1a] border border-neutral-700' : 'bg-white border border-neutral-200'
+              }`}>
               <button
                 onClick={handleToolClick(onTikTokClick)}
-                className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-neutral-800 transition-colors group"
+                className={`w-full flex items-center gap-3 px-3 py-2.5 transition-colors group ${isDark ? 'hover:bg-neutral-800' : 'hover:bg-neutral-100'
+                  }`}
               >
                 <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#ff0050] via-[#00f2ea] to-[#ff0050] flex items-center justify-center">
                   <TikTokIcon size={16} className="text-white" />
                 </div>
                 <div className="text-left">
-                  <p className="text-sm text-neutral-200 group-hover:text-white">Import TikTok</p>
-                  <p className="text-xs text-neutral-500">Download without watermark</p>
+                  <p className={`text-sm ${isDark ? 'text-neutral-200 group-hover:text-white' : 'text-neutral-700 group-hover:text-neutral-900'}`}>Import TikTok</p>
+                  <p className={`text-xs ${isDark ? 'text-neutral-500' : 'text-neutral-400'}`}>Download without watermark</p>
                 </div>
               </button>
 
               {/* Placeholder for future tools */}
-              <div className="border-t border-neutral-800 mt-1 pt-1">
-                <div className="px-3 py-2 text-xs text-neutral-600 italic">
+              <div className={`mt-1 pt-1 ${isDark ? 'border-t border-neutral-800' : 'border-t border-neutral-200'}`}>
+                <div className={`px-3 py-2 text-xs italic ${isDark ? 'text-neutral-600' : 'text-neutral-400'}`}>
                   More tools coming soon...
                 </div>
               </div>
@@ -149,9 +164,10 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         </div>
       </div>
 
-      <div className="w-8 h-[1px] bg-neutral-800 my-1"></div>
+      <div className={`w-8 h-[1px] my-1 ${isDark ? 'bg-neutral-800' : 'bg-neutral-200'}`}></div>
 
-      <button className="w-8 h-8 rounded-full overflow-hidden border border-neutral-700 mb-2 hover:scale-110 transition-all duration-200">
+      <button className={`w-8 h-8 rounded-full overflow-hidden mb-2 hover:scale-110 transition-all duration-200 ${isDark ? 'border border-neutral-700' : 'border border-neutral-300'
+        }`}>
         <img src="https://picsum.photos/40/40" alt="Profile" className="w-full h-full object-cover" />
       </button>
     </div>

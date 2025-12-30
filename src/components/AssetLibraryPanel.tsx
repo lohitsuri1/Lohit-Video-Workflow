@@ -15,6 +15,7 @@ interface AssetLibraryPanelProps {
     onSelectAsset: (url: string, type: 'image' | 'video') => void;
     panelY?: number;
     variant?: 'panel' | 'modal';
+    canvasTheme?: 'dark' | 'light';
 }
 
 const CATEGORIES = [
@@ -32,7 +33,8 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({
     onClose,
     onSelectAsset,
     panelY = 100,
-    variant = 'panel'
+    variant = 'panel',
+    canvasTheme = 'dark'
 }) => {
     const [selectedCategory, setSelectedCategory] = useState('All');
     const [assets, setAssets] = useState<LibraryAsset[]>([]);
@@ -78,16 +80,19 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({
 
     if (!isOpen) return null;
 
+    // Theme helper
+    const isDark = canvasTheme === 'dark';
+
     if (variant === 'modal') {
         return (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
                 <div
-                    className="flex flex-col w-[800px] h-[600px] bg-[#0a0a0a] border border-neutral-800 rounded-2xl shadow-2xl overflow-hidden"
+                    className={`flex flex-col w-[800px] h-[600px] border rounded-2xl shadow-2xl overflow-hidden transition-colors duration-300 ${isDark ? 'bg-[#0a0a0a] border-neutral-800' : 'bg-white border-neutral-200'}`}
                     onClick={(e) => e.stopPropagation()}
                 >
-                    <div className="flex items-center justify-between p-4 border-b border-neutral-800">
-                        <h2 className="text-lg font-medium text-white pl-2">Asset Library</h2>
-                        <button onClick={onClose} className="p-2 hover:bg-neutral-800 rounded-lg text-neutral-400 hover:text-white transition-colors">
+                    <div className={`flex items-center justify-between p-4 border-b ${isDark ? 'border-neutral-800' : 'border-neutral-200'}`}>
+                        <h2 className={`text-lg font-medium pl-2 ${isDark ? 'text-white' : 'text-neutral-900'}`}>Asset Library</h2>
+                        <button onClick={onClose} className={`p-2 rounded-lg transition-colors ${isDark ? 'hover:bg-neutral-800 text-neutral-400 hover:text-white' : 'hover:bg-neutral-100 text-neutral-500 hover:text-neutral-900'}`}>
                             <X size={20} />
                         </button>
                     </div>
@@ -100,6 +105,7 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({
                         onSelectAsset={onSelectAsset}
                         onDeleteAsset={handleDeleteAsset}
                         variant={variant}
+                        canvasTheme={canvasTheme}
                     />
                 </div>
                 {/* Click outside to close */}
@@ -110,7 +116,7 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({
 
     return (
         <div
-            className="fixed left-20 z-40 w-[700px] bg-[#0a0a0a]/95 backdrop-blur-xl border border-neutral-800 rounded-2xl shadow-2xl flex flex-col max-h-[500px] overflow-hidden animate-in slide-in-from-left-4 duration-200"
+            className={`fixed left-20 z-40 w-[700px] backdrop-blur-xl border rounded-2xl shadow-2xl flex flex-col max-h-[500px] overflow-hidden animate-in slide-in-from-left-4 duration-200 transition-colors ${isDark ? 'bg-[#0a0a0a]/95 border-neutral-800' : 'bg-white/95 border-neutral-200'}`}
             style={{ top: Math.min(window.innerHeight - 510, Math.max(20, panelY)) }}
         >
             <AssetLibraryContent
@@ -121,6 +127,7 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({
                 onSelectAsset={onSelectAsset}
                 onDeleteAsset={handleDeleteAsset}
                 variant={variant}
+                canvasTheme={canvasTheme}
             />
         </div>
     );
@@ -129,9 +136,10 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({
 // Extracted Internal Component for reuse
 const AssetLibraryContent = ({
     selectedCategory, setSelectedCategory,
-    assets, loading, onSelectAsset, onDeleteAsset, variant
+    assets, loading, onSelectAsset, onDeleteAsset, variant, canvasTheme = 'dark'
 }: any) => {
     const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+    const isDark = canvasTheme === 'dark';
 
     const filteredAssets = assets.filter((asset: any) =>
         selectedCategory === 'All' || asset.category === selectedCategory
@@ -163,8 +171,8 @@ const AssetLibraryContent = ({
                             key={cat}
                             onClick={() => setSelectedCategory(cat)}
                             className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border ${selectedCategory === cat
-                                ? 'bg-neutral-100 text-black border-white'
-                                : 'bg-neutral-900 text-neutral-400 border-neutral-800 hover:border-neutral-600'
+                                ? isDark ? 'bg-neutral-100 text-black border-white' : 'bg-neutral-900 text-white border-neutral-900'
+                                : isDark ? 'bg-neutral-900 text-neutral-400 border-neutral-800 hover:border-neutral-600' : 'bg-white text-neutral-600 border-neutral-200 hover:border-neutral-300'
                                 }`}
                         >
                             {cat}

@@ -41,6 +41,8 @@ interface CanvasNodeProps {
   // Mouse event callbacks for chat panel drag functionality
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
+  // Theme
+  canvasTheme?: 'dark' | 'light';
 }
 
 export const CanvasNode: React.FC<CanvasNodeProps> = ({
@@ -69,7 +71,8 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
   onImageToVideo,
   zoom,
   onMouseEnter,
-  onMouseLeave
+  onMouseLeave,
+  canvasTheme = 'dark'
 }) => {
   // ============================================================================
   // STATE
@@ -82,6 +85,9 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
   const isIdle = data.status === NodeStatus.IDLE || data.status === NodeStatus.ERROR;
   const isLoading = data.status === NodeStatus.LOADING;
   const isSuccess = data.status === NodeStatus.SUCCESS;
+
+  // Theme helper
+  const isDark = canvasTheme === 'dark';
 
   // ============================================================================
   // EFFECTS
@@ -191,7 +197,7 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
 
         {/* Image Editor Node Card */}
         <div
-          className={`relative rounded-2xl transition-all duration-200 flex flex-col ${inputUrl ? '' : 'bg-[#0f0f0f] border border-neutral-700 shadow-2xl'} ${selected ? 'ring-1 ring-blue-500/30' : ''}`}
+          className={`relative rounded-2xl transition-all duration-200 flex flex-col ${inputUrl ? '' : isDark ? 'bg-[#0f0f0f] border border-neutral-700 shadow-2xl' : 'bg-white border border-neutral-200 shadow-lg'} ${selected ? 'ring-1 ring-blue-500/30' : ''}`}
           style={{
             width: inputUrl ? 'auto' : '340px',
             maxWidth: inputUrl ? '500px' : 'none'
@@ -266,7 +272,7 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
 
         {/* Video Editor Node Card */}
         <div
-          className={`relative rounded-2xl transition-all duration-200 flex flex-col ${videoUrl ? '' : 'bg-[#0f0f0f] border border-neutral-700 shadow-2xl'} ${selected ? 'ring-1 ring-purple-500/30' : ''}`}
+          className={`relative rounded-2xl transition-all duration-200 flex flex-col ${videoUrl ? '' : isDark ? 'bg-[#0f0f0f] border border-neutral-700 shadow-2xl' : 'bg-white border border-neutral-200 shadow-lg'} ${selected ? 'ring-1 ring-purple-500/30' : ''}`}
           style={{
             width: videoUrl ? 'auto' : '340px',
             maxWidth: videoUrl ? '500px' : 'none'
@@ -341,7 +347,7 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
       <div className="relative">
         {/* Main Node Card - Video nodes are wider to fit more controls */}
         <div
-          className={`relative ${data.type === NodeType.VIDEO ? 'w-[385px]' : 'w-[365px]'} rounded-2xl bg-[#0f0f0f] border transition-all duration-200 flex flex-col shadow-2xl ${selected ? 'border-blue-500/50 ring-1 ring-blue-500/30' : 'border-neutral-800'}`}
+          className={`relative ${data.type === NodeType.VIDEO ? 'w-[385px]' : 'w-[365px]'} rounded-2xl border transition-all duration-300 flex flex-col shadow-2xl ${isDark ? 'bg-[#0f0f0f]' : 'bg-white'} ${selected ? 'border-blue-500/50 ring-1 ring-blue-500/30' : isDark ? 'border-neutral-800' : 'border-neutral-200'}`}
         >
           {/* Header (Editable Title) */}
           {isEditingTitle ? (
@@ -412,6 +418,7 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
               onGenerate={onGenerate}
               onSelect={onSelect}
               zoom={zoom}
+              canvasTheme={canvasTheme}
             />
           </div>
         )}

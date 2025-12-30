@@ -708,6 +708,7 @@ export default function App() {
           closeHistoryPanel();
           closeAssetLibrary();
         }}
+        canvasTheme={canvasTheme}
       />
 
       {/* Workflow Panel */}
@@ -717,6 +718,7 @@ export default function App() {
         onLoadWorkflow={handleLoadWithTracking}
         currentWorkflowId={workflowId || undefined}
         panelY={workflowPanelY}
+        canvasTheme={canvasTheme}
       />
 
       {/* History Panel */}
@@ -725,6 +727,7 @@ export default function App() {
         onClose={closeHistoryPanel}
         onSelectAsset={handleSelectAsset}
         panelY={historyPanelY}
+        canvasTheme={canvasTheme}
       />
 
       <AssetLibraryPanel
@@ -733,6 +736,7 @@ export default function App() {
         onSelectAsset={handleLibrarySelect}
         panelY={assetLibraryY}
         variant={assetLibraryVariant}
+        canvasTheme={canvasTheme}
       />
 
       <CreateAssetModal
@@ -751,7 +755,7 @@ export default function App() {
 
       {/* Agent Chat */}
       <ChatBubble onClick={toggleChat} isOpen={isChatOpen} />
-      <ChatPanel isOpen={isChatOpen} onClose={closeChat} isDraggingNode={isDraggingNodeToChat} />
+      <ChatPanel isOpen={isChatOpen} onClose={closeChat} isDraggingNode={isDraggingNodeToChat} canvasTheme={canvasTheme} />
 
       {/* Top Bar */}
       <TopBar
@@ -890,6 +894,7 @@ export default function App() {
                 zoom={viewport.zoom}
                 onMouseEnter={() => setCanvasHoveredNodeId(node.id)}
                 onMouseLeave={() => setCanvasHoveredNodeId(null)}
+                canvasTheme={canvasTheme}
               />
             ))}
           </div>
@@ -989,8 +994,8 @@ export default function App() {
       />
 
       {/* Zoom Slider */}
-      < div className="fixed bottom-6 left-16 bg-neutral-900 border border-neutral-700 rounded-full px-4 py-2 flex items-center gap-3 z-50" >
-        <span className="text-xs text-neutral-400">Zoom</span>
+      < div className={`fixed bottom-6 left-16 rounded-full px-4 py-2 flex items-center gap-3 z-50 transition-colors duration-300 ${canvasTheme === 'dark' ? 'bg-neutral-900 border border-neutral-700' : 'bg-white/90 backdrop-blur-sm border border-neutral-200'}`} >
+        <span className={`text-xs ${canvasTheme === 'dark' ? 'text-neutral-400' : 'text-neutral-500'}`}>Zoom</span>
         <input
           type="range"
           min="0.1"
@@ -1000,7 +1005,7 @@ export default function App() {
           onChange={handleSliderZoom}
           className="w-32"
         />
-        <span className="text-xs text-neutral-300 w-10">{Math.round(viewport.zoom * 100)}%</span>
+        <span className={`text-xs w-10 ${canvasTheme === 'dark' ? 'text-neutral-300' : 'text-neutral-600'}`}>{Math.round(viewport.zoom * 100)}%</span>
       </div >
 
       <ImageEditorModal

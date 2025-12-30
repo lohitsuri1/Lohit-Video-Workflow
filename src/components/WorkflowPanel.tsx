@@ -31,6 +31,7 @@ interface WorkflowPanelProps {
     onLoadWorkflow: (workflowId: string) => void;
     currentWorkflowId?: string;
     panelY?: number;
+    canvasTheme?: 'dark' | 'light';
 }
 
 export const WorkflowPanel: React.FC<WorkflowPanelProps> = ({
@@ -38,7 +39,8 @@ export const WorkflowPanel: React.FC<WorkflowPanelProps> = ({
     onClose,
     onLoadWorkflow,
     currentWorkflowId,
-    panelY = 200
+    panelY = 200,
+    canvasTheme = 'dark'
 }) => {
     const [workflows, setWorkflows] = useState<WorkflowSummary[]>([]);
     const [publicWorkflows, setPublicWorkflows] = useState<WorkflowSummary[]>([]);
@@ -50,6 +52,9 @@ export const WorkflowPanel: React.FC<WorkflowPanelProps> = ({
     const [editingCoverFor, setEditingCoverFor] = useState<string | null>(null);
     const [coverAssets, setCoverAssets] = useState<AssetMetadata[]>([]);
     const [loadingAssets, setLoadingAssets] = useState(false);
+
+    // Theme helper
+    const isDark = canvasTheme === 'dark';
 
     // Fetch workflows on open
     useEffect(() => {
@@ -157,28 +162,28 @@ export const WorkflowPanel: React.FC<WorkflowPanelProps> = ({
         <>
             {/* Main Panel */}
             <div
-                className="fixed left-20 w-[700px] bg-[#0a0a0a]/95 backdrop-blur-xl border border-neutral-800 rounded-2xl shadow-2xl z-40 flex flex-col overflow-hidden max-h-[500px]"
+                className={`fixed left-20 w-[700px] backdrop-blur-xl border rounded-2xl shadow-2xl z-40 flex flex-col overflow-hidden max-h-[500px] transition-colors duration-300 ${isDark ? 'bg-[#0a0a0a]/95 border-neutral-800' : 'bg-white/95 border-neutral-200'}`}
                 style={{ top: panelY }}
             >
                 {/* Header with Tabs */}
-                <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-800">
+                <div className={`flex items-center justify-between px-5 py-4 border-b ${isDark ? 'border-neutral-800' : 'border-neutral-200'}`}>
                     <div className="flex items-center gap-6">
                         <button
                             onClick={() => setActiveTab('my')}
-                            className={`font-medium pb-1 transition-colors ${activeTab === 'my' ? 'text-white border-b-2 border-white' : 'text-neutral-500 hover:text-neutral-300'}`}
+                            className={`font-medium pb-1 transition-colors ${activeTab === 'my' ? isDark ? 'text-white border-b-2 border-white' : 'text-neutral-900 border-b-2 border-neutral-900' : isDark ? 'text-neutral-500 hover:text-neutral-300' : 'text-neutral-400 hover:text-neutral-600'}`}
                         >
                             My Workflows
                         </button>
                         <button
                             onClick={() => setActiveTab('public')}
-                            className={`font-medium pb-1 transition-colors ${activeTab === 'public' ? 'text-white border-b-2 border-white' : 'text-neutral-500 hover:text-neutral-300'}`}
+                            className={`font-medium pb-1 transition-colors ${activeTab === 'public' ? isDark ? 'text-white border-b-2 border-white' : 'text-neutral-900 border-b-2 border-neutral-900' : isDark ? 'text-neutral-500 hover:text-neutral-300' : 'text-neutral-400 hover:text-neutral-600'}`}
                         >
                             Public Workflows
                         </button>
                     </div>
                     <button
                         onClick={onClose}
-                        className="text-neutral-500 hover:text-white transition-colors"
+                        className={`transition-colors ${isDark ? 'text-neutral-500 hover:text-white' : 'text-neutral-400 hover:text-neutral-900'}`}
                     >
                         <Maximize2 size={18} />
                     </button>

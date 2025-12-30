@@ -24,13 +24,15 @@ interface HistoryPanelProps {
     onClose: () => void;
     onSelectAsset: (type: 'images' | 'videos', url: string, prompt: string, model?: string) => void;
     panelY?: number;
+    canvasTheme?: 'dark' | 'light';
 }
 
 export const HistoryPanel: React.FC<HistoryPanelProps> = ({
     isOpen,
     onClose,
     onSelectAsset,
-    panelY = 200
+    panelY = 200,
+    canvasTheme = 'dark'
 }) => {
     const [activeTab, setActiveTab] = useState<'images' | 'videos'>('images');
     const [assets, setAssets] = useState<AssetMetadata[]>([]);
@@ -38,6 +40,9 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({
     const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
     const [imageCounts, setImageCounts] = useState<number>(0);
     const [videoCounts, setVideoCounts] = useState<number>(0);
+
+    // Theme helper
+    const isDark = canvasTheme === 'dark';
 
     // Fetch assets when panel opens or tab changes
     useEffect(() => {
@@ -107,16 +112,16 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({
         <>
             {/* Main Panel */}
             <div
-                className="fixed left-20 w-[700px] bg-[#0a0a0a]/95 backdrop-blur-xl border border-neutral-800 rounded-2xl shadow-2xl z-40 flex flex-col overflow-hidden max-h-[500px]"
+                className={`fixed left-20 w-[700px] backdrop-blur-xl border rounded-2xl shadow-2xl z-40 flex flex-col overflow-hidden max-h-[500px] transition-colors duration-300 ${isDark ? 'bg-[#0a0a0a]/95 border-neutral-800' : 'bg-white/95 border-neutral-200'}`}
                 style={{ top: panelY }}
             >
                 {/* Header */}
-                <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-800">
+                <div className={`flex items-center justify-between px-5 py-4 border-b ${isDark ? 'border-neutral-800' : 'border-neutral-200'}`}>
                     <div className="flex items-center gap-6">
                         <button
                             className={`text-sm font-medium transition-colors pb-1 flex items-center gap-2 ${activeTab === 'images'
-                                ? 'text-white border-b-2 border-white'
-                                : 'text-neutral-500 hover:text-white'
+                                ? isDark ? 'text-white border-b-2 border-white' : 'text-neutral-900 border-b-2 border-neutral-900'
+                                : isDark ? 'text-neutral-500 hover:text-white' : 'text-neutral-400 hover:text-neutral-900'
                                 }`}
                             onClick={() => setActiveTab('images')}
                         >
@@ -125,8 +130,8 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({
                         </button>
                         <button
                             className={`text-sm font-medium transition-colors pb-1 flex items-center gap-2 ${activeTab === 'videos'
-                                ? 'text-white border-b-2 border-white'
-                                : 'text-neutral-500 hover:text-white'
+                                ? isDark ? 'text-white border-b-2 border-white' : 'text-neutral-900 border-b-2 border-neutral-900'
+                                : isDark ? 'text-neutral-500 hover:text-white' : 'text-neutral-400 hover:text-neutral-900'
                                 }`}
                             onClick={() => setActiveTab('videos')}
                         >
@@ -136,7 +141,7 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({
                     </div>
                     <button
                         onClick={onClose}
-                        className="text-neutral-500 hover:text-white transition-colors"
+                        className={`transition-colors ${isDark ? 'text-neutral-500 hover:text-white' : 'text-neutral-400 hover:text-neutral-900'}`}
                     >
                         <Maximize2 size={18} />
                     </button>
@@ -149,8 +154,8 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({
                             <Loader2 className="animate-spin text-neutral-500" size={24} />
                         </div>
                     ) : assets.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center h-40 text-neutral-500">
-                            <div className="w-16 h-16 rounded-full bg-neutral-800 flex items-center justify-center mb-3">
+                        <div className={`flex flex-col items-center justify-center h-40 ${isDark ? 'text-neutral-500' : 'text-neutral-400'}`}>
+                            <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-3 ${isDark ? 'bg-neutral-800' : 'bg-neutral-100'}`}>
                                 {activeTab === 'images' ? <ImageIcon size={24} /> : <Video size={24} />}
                             </div>
                             <p>No {activeTab} found</p>
@@ -160,13 +165,13 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({
                         <div className="space-y-6">
                             {sortedDates.map(date => (
                                 <div key={date}>
-                                    <h3 className="text-sm text-neutral-400 mb-3">{date}</h3>
+                                    <h3 className={`text-sm mb-3 ${isDark ? 'text-neutral-400' : 'text-neutral-500'}`}>{date}</h3>
                                     <div className="grid grid-cols-3 gap-3">
                                         {groupedAssets[date].map(asset => (
                                             <div
                                                 key={asset.id}
                                                 onClick={() => handleSelectAsset(asset)}
-                                                className="aspect-square rounded-xl overflow-hidden cursor-pointer transition-all hover:scale-105 group relative bg-neutral-900"
+                                                className={`aspect-square rounded-xl overflow-hidden cursor-pointer transition-all hover:scale-105 group relative ${isDark ? 'bg-neutral-900' : 'bg-neutral-100'}`}
                                             >
                                                 {activeTab === 'images' ? (
                                                     <img
@@ -209,15 +214,15 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({
             {/* Delete Confirmation Modal */}
             {deleteConfirm && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-                    <div className="bg-[#1a1a1a] border border-neutral-700 rounded-2xl p-6 w-[340px] shadow-2xl">
-                        <h3 className="text-lg font-semibold text-white mb-2">Delete Asset</h3>
-                        <p className="text-neutral-400 text-sm mb-6">
+                    <div className={`border rounded-2xl p-6 w-[340px] shadow-2xl ${isDark ? 'bg-[#1a1a1a] border-neutral-700' : 'bg-white border-neutral-200'}`}>
+                        <h3 className={`text-lg font-semibold mb-2 ${isDark ? 'text-white' : 'text-neutral-900'}`}>Delete Asset</h3>
+                        <p className={`text-sm mb-6 ${isDark ? 'text-neutral-400' : 'text-neutral-600'}`}>
                             Are you sure you want to delete this {activeTab === 'images' ? 'image' : 'video'}? This action cannot be undone.
                         </p>
                         <div className="flex gap-3 justify-end">
                             <button
                                 onClick={() => setDeleteConfirm(null)}
-                                className="px-4 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-white text-sm transition-colors"
+                                className={`px-4 py-2 rounded-lg text-sm transition-colors ${isDark ? 'bg-neutral-800 hover:bg-neutral-700 text-white' : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-900'}`}
                             >
                                 Cancel
                             </button>
