@@ -246,6 +246,81 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
     );
   }
 
+  // Special rendering for Video Editor node
+  if (data.type === NodeType.VIDEO_EDITOR) {
+    // Get video URL from parent node or own resultUrl
+    const videoUrl = inputUrl || data.resultUrl;
+
+    return (
+      <div
+        className={`absolute flex items-center group/node touch-none pointer-events-auto`}
+        style={{
+          transform: `translate(${data.x}px, ${data.y}px)`,
+          transition: 'box-shadow 0.2s',
+          zIndex: selected ? 50 : 10
+        }}
+        onPointerDown={(e) => onNodePointerDown(e, data.id)}
+        onContextMenu={(e) => onContextMenu(e, data.id)}
+      >
+        <NodeConnectors nodeId={data.id} onConnectorDown={onConnectorDown} />
+
+        {/* Video Editor Node Card */}
+        <div
+          className={`relative rounded-2xl transition-all duration-200 flex flex-col ${videoUrl ? '' : 'bg-[#0f0f0f] border border-neutral-700 shadow-2xl'} ${selected ? 'ring-1 ring-purple-500/30' : ''}`}
+          style={{
+            width: videoUrl ? 'auto' : '340px',
+            maxWidth: videoUrl ? '500px' : 'none'
+          }}
+          onDoubleClick={(e) => {
+            e.stopPropagation();
+            if (onOpenEditor) {
+              onOpenEditor(data.id);
+            }
+          }}
+        >
+          {/* Header */}
+          <div className="absolute -top-8 left-0 text-sm px-2 py-0.5 rounded font-medium text-purple-400">
+            Video Editor
+          </div>
+
+          {/* Content Area */}
+          <div
+            className={`flex flex-col items-center justify-center ${videoUrl ? 'p-0' : 'p-6'}`}
+            style={{ minHeight: videoUrl ? 'auto' : '380px' }}
+          >
+            {videoUrl ? (
+              <video
+                src={videoUrl}
+                className={`rounded-xl w-full h-auto object-cover ${selected ? 'ring-2 ring-purple-500 shadow-2xl' : ''}`}
+                style={{ maxHeight: '500px', aspectRatio: '16/9' }}
+                muted
+                playsInline
+                onMouseEnter={(e) => (e.currentTarget as HTMLVideoElement).play()}
+                onMouseLeave={(e) => {
+                  const video = e.currentTarget as HTMLVideoElement;
+                  video.pause();
+                  video.currentTime = 0;
+                }}
+              />
+            ) : (
+              <div className="text-neutral-500 text-center text-sm">
+                <p>Connect a Video node</p>
+                <p className="text-xs mt-1 text-neutral-600">Double click to open editor</p>
+              </div>
+            )}
+          </div>
+
+          {/* Trim indicator (if trimmed) */}
+          {data.trimStart !== undefined && data.trimEnd !== undefined && (
+            <div className="absolute bottom-2 left-2 right-2 bg-black/70 rounded-lg px-2 py-1 text-xs text-purple-300 flex justify-between">
+              <span>Trimmed: {data.trimStart.toFixed(1)}s - {data.trimEnd.toFixed(1)}s</span>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className={`absolute group/node touch-none pointer-events-auto`}

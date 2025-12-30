@@ -25,6 +25,7 @@ import { useHistory } from './hooks/useHistory';
 import { useCanvasTitle } from './hooks/useCanvasTitle';
 import { useWorkflow } from './hooks/useWorkflow';
 import { useImageEditor } from './hooks/useImageEditor';
+import { useVideoEditor } from './hooks/useVideoEditor';
 import { usePanelState } from './hooks/usePanelState';
 import { useAssetHandlers } from './hooks/useAssetHandlers';
 import { useTextNodeHandlers } from './hooks/useTextNodeHandlers';
@@ -40,6 +41,7 @@ import { WorkflowPanel } from './components/WorkflowPanel';
 import { HistoryPanel } from './components/HistoryPanel';
 import { ChatPanel, ChatBubble } from './components/ChatPanel';
 import { ImageEditorModal } from './components/modals/ImageEditorModal';
+import { VideoEditorModal } from './components/modals/VideoEditorModal';
 import { CreateAssetModal } from './components/modals/CreateAssetModal';
 import { TikTokImportModal } from './components/modals/TikTokImportModal';
 import { AssetLibraryPanel } from './components/AssetLibraryPanel';
@@ -295,6 +297,28 @@ export default function App() {
     handleCloseImageEditor,
     handleUpload
   } = useImageEditor({ nodes, updateNode });
+
+  // Video editor modal
+  const {
+    videoEditorModal,
+    handleOpenVideoEditor,
+    handleCloseVideoEditor,
+    handleExportTrimmedVideo
+  } = useVideoEditor({ nodes, updateNode });
+
+  /**
+   * Routes editor open to the correct handler based on node type
+   */
+  const handleOpenEditor = React.useCallback((nodeId: string) => {
+    const node = nodes.find(n => n.id === nodeId);
+    if (!node) return;
+
+    if (node.type === NodeType.VIDEO_EDITOR) {
+      handleOpenVideoEditor(nodeId);
+    } else {
+      handleOpenImageEditor(nodeId);
+    }
+  }, [nodes, handleOpenVideoEditor, handleOpenImageEditor]);
 
   // Text node handlers
   const {
@@ -804,6 +828,13 @@ export default function App() {
                   // Get first parent's result for display (multiple inputs handled in generation)
                   if (!node.parentIds || node.parentIds.length === 0) return undefined;
                   const parent = nodes.find(n => n.id === node.parentIds![0]);
+
+                  // VIDEO_EDITOR nodes need the actual video URL from parent Video node
+                  if (node.type === NodeType.VIDEO_EDITOR && parent?.type === NodeType.VIDEO) {
+                    return parent.resultUrl;
+                  }
+
+                  // For other nodes, if parent is video, use lastFrame for image preview
                   if (parent?.type === NodeType.VIDEO && parent.lastFrame) {
                     return parent.lastFrame;
                   }
@@ -846,7 +877,7 @@ export default function App() {
                 onSelect={(id) => setSelectedNodeIds([id])}
                 onConnectorDown={handleConnectorPointerDown}
                 isHoveredForConnection={connectionHoveredNodeId === node.id}
-                onOpenEditor={handleOpenImageEditor}
+                onOpenEditor={handleOpenEditor}
                 onUpload={handleUpload}
                 onExpand={handleExpandImage}
                 onDragStart={handleNodeDragStart}
@@ -1044,6 +1075,17 @@ export default function App() {
           });
         }}
         onUpdate={updateNode}
+      />
+
+      {/* Video Editor Modal */}
+      <VideoEditorModal
+        isOpen={videoEditorModal.isOpen}
+        nodeId={videoEditorModal.nodeId}
+        videoUrl={videoEditorModal.videoUrl}
+        initialTrimStart={nodes.find(n => n.id === videoEditorModal.nodeId)?.trimStart}
+        initialTrimEnd={nodes.find(n => n.id === videoEditorModal.nodeId)?.trimEnd}
+        onClose={handleCloseVideoEditor}
+        onExport={handleExportTrimmedVideo}
       />
 
       {/* Fullscreen Media Preview Modal */}

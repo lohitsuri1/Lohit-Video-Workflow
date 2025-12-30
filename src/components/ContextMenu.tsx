@@ -3,6 +3,7 @@ import {
   Type,
   Image as ImageIcon,
   Video,
+  Film,
   Music,
   PenTool,
   Layout,
@@ -314,6 +315,15 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
             icon={<PenTool size={18} />}
             label="Image Editor"
             onClick={() => onSelectType(NodeType.IMAGE_EDITOR)}
+            canvasTheme={canvasTheme}
+          />
+        )}
+
+        {!isConnector && (
+          <MenuItem
+            icon={<Film size={18} />}
+            label="Video Editor"
+            onClick={() => onSelectType(NodeType.VIDEO_EDITOR)}
             canvasTheme={canvasTheme}
           />
         )}

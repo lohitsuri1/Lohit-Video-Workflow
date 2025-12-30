@@ -157,7 +157,8 @@ export const useConnectionDragging = () => {
             // VIDEO nodes can only connect to other VIDEO nodes (via lastFrame)
             // Cannot connect to IMAGE or IMAGE_EDITOR
             if (parentNode.type === NodeType.VIDEO) {
-                return childNode.type === NodeType.VIDEO;
+                return childNode.type === NodeType.VIDEO ||
+                    childNode.type === NodeType.VIDEO_EDITOR;
             }
 
             // IMAGE nodes can connect to IMAGE, VIDEO, or IMAGE_EDITOR
@@ -172,6 +173,12 @@ export const useConnectionDragging = () => {
                 return childNode.type === NodeType.IMAGE ||
                     childNode.type === NodeType.VIDEO ||
                     childNode.type === NodeType.IMAGE_EDITOR;
+            }
+
+            // VIDEO_EDITOR can only connect to VIDEO (to feed trimmed video for generation)
+            // No chaining VIDEO_EDITOR → VIDEO_EDITOR
+            if (parentNode.type === NodeType.VIDEO_EDITOR) {
+                return childNode.type === NodeType.VIDEO;
             }
 
             return true;
