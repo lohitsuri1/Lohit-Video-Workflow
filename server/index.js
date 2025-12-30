@@ -616,10 +616,12 @@ app.post('/api/assets/:type', async (req, res) => {
     }
 });
 
-// List all assets of a type
+// List all assets of a type (with pagination support)
 app.get('/api/assets/:type', async (req, res) => {
     try {
         const { type } = req.params;
+        const limit = parseInt(req.query.limit) || 0; // 0 = no limit (backward compatible)
+        const offset = parseInt(req.query.offset) || 0;
 
         if (!['images', 'videos'].includes(type)) {
             return res.status(400).json({ error: 'Invalid asset type' });
@@ -628,7 +630,8 @@ app.get('/api/assets/:type', async (req, res) => {
         const targetDir = type === 'images' ? IMAGES_DIR : VIDEOS_DIR;
 
         if (!fs.existsSync(targetDir)) {
-            return res.json([]);
+            // Return paginated format if limit is specified, otherwise array for backward compatibility
+            return res.json(limit > 0 ? { assets: [], total: 0, hasMore: false } : []);
         }
 
         const files = fs.readdirSync(targetDir);
@@ -650,6 +653,17 @@ app.get('/api/assets/:type', async (req, res) => {
         // Sort by createdAt descending (newest first)
         assets.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
+        // If limit is specified, return paginated response
+        if (limit > 0) {
+            const paginatedAssets = assets.slice(offset, offset + limit);
+            return res.json({
+                assets: paginatedAssets,
+                total: assets.length,
+                hasMore: offset + limit < assets.length
+            });
+        }
+
+        // Backward compatible: return full array if no limit specified
         res.json(assets);
     } catch (error) {
         console.error('List assets error:', error);
