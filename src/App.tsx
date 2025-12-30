@@ -822,12 +822,21 @@ export default function App() {
                 onGenerate={handleGenerate}
                 onAddNext={handleAddNext}
                 selected={selectedNodeIds.includes(node.id)}
+                showControls={selectedNodeIds.length === 1 && selectedNodeIds.includes(node.id)}
                 onNodePointerDown={(e) => {
-                  // If clicking on an already-selected node, preserve selection for multi-drag
-                  if (selectedNodeIds.includes(node.id)) {
-                    handleNodePointerDown(e, node.id, undefined);
+                  // If shift is held, preserve selection for multi-drag/multi-select
+                  if (e.shiftKey) {
+                    if (selectedNodeIds.includes(node.id)) {
+                      handleNodePointerDown(e, node.id, undefined);
+                    } else {
+                      // Add to selection
+                      setSelectedNodeIds(prev => [...prev, node.id]);
+                      handleNodePointerDown(e, node.id, undefined);
+                    }
                   } else {
-                    handleNodePointerDown(e, node.id, setSelectedNodeIds);
+                    // No shift: always select just this node (to show its controls)
+                    setSelectedNodeIds([node.id]);
+                    handleNodePointerDown(e, node.id, undefined);
                   }
                 }}
                 onContextMenu={handleNodeContextMenu}

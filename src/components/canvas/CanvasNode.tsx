@@ -19,6 +19,7 @@ interface CanvasNodeProps {
   onGenerate: (id: string) => void;
   onAddNext: (id: string, type: 'left' | 'right') => void;
   selected: boolean;
+  showControls?: boolean; // Only show controls when single node is selected (not in group selection)
   onSelect: (id: string) => void;
   onNodePointerDown: (e: React.PointerEvent, id: string) => void;
   onContextMenu: (e: React.MouseEvent, id: string) => void;
@@ -37,6 +38,9 @@ interface CanvasNodeProps {
   onImageToImage?: (nodeId: string) => void;
   onImageToVideo?: (nodeId: string) => void;
   zoom: number;
+  // Mouse event callbacks for chat panel drag functionality
+  onMouseEnter?: () => void;
+  onMouseLeave?: () => void;
 }
 
 export const CanvasNode: React.FC<CanvasNodeProps> = ({
@@ -47,6 +51,7 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
   onGenerate,
   onAddNext,
   selected,
+  showControls = true, // Default to true for backward compatibility
   onSelect,
   onNodePointerDown,
   onContextMenu,
@@ -62,7 +67,9 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
   onTextToImage,
   onImageToImage,
   onImageToVideo,
-  zoom
+  zoom,
+  onMouseEnter,
+  onMouseLeave
 }) => {
   // ============================================================================
   // STATE
@@ -250,6 +257,8 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
       }}
       onPointerDown={(e) => onNodePointerDown(e, data.id)}
       onContextMenu={(e) => onContextMenu(e, data.id)}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
     >
       <NodeConnectors nodeId={data.id} onConnectorDown={onConnectorDown} />
 
@@ -315,8 +324,8 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
           />
         </div>
 
-        {/* Control Panel - Positioned absolutely centered below the image card to prevent shifting the image */}
-        {selected && data.type !== NodeType.TEXT && (
+        {/* Control Panel - Only show when single node is selected (not in group selection) */}
+        {selected && showControls && data.type !== NodeType.TEXT && (
           <div className="absolute top-[calc(100%+12px)] left-1/2 -translate-x-1/2 w-[600px] flex justify-center z-[100]">
             <NodeControls
               data={data}
