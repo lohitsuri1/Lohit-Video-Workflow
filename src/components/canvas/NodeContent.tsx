@@ -159,6 +159,10 @@ export const NodeContent: React.FC<NodeContentProps> = ({
                                 e.preventDefault();
                                 if (data.resultUrl) {
                                     const filename = data.type === NodeType.VIDEO ? `video_${data.id}.mp4` : `image_${data.id}.png`;
+                                    console.log('[Download] Starting download:', { url: data.resultUrl, filename });
+
+                                    // Strip query string from URL for download
+                                    const cleanUrl = data.resultUrl.split('?')[0];
 
                                     // Check if it's a base64 data URL
                                     if (data.resultUrl.startsWith('data:')) {
@@ -170,10 +174,14 @@ export const NodeContent: React.FC<NodeContentProps> = ({
                                         link.click();
                                         document.body.removeChild(link);
                                     } else {
-                                        // For file URLs, fetch and download as blob
-                                        fetch(data.resultUrl)
-                                            .then(res => res.blob())
+                                        // For file URLs, fetch with cache bypass and download as blob
+                                        fetch(cleanUrl, { cache: 'no-store' })
+                                            .then(res => {
+                                                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                                                return res.blob();
+                                            })
                                             .then(blob => {
+                                                console.log('[Download] Blob created:', blob.size, 'bytes');
                                                 const url = window.URL.createObjectURL(blob);
                                                 const link = document.createElement('a');
                                                 link.href = url;
@@ -182,9 +190,22 @@ export const NodeContent: React.FC<NodeContentProps> = ({
                                                 link.click();
                                                 document.body.removeChild(link);
                                                 window.URL.revokeObjectURL(url);
+                                                console.log('[Download] Complete');
                                             })
-                                            .catch(err => console.error('Download failed:', err));
+                                            .catch(err => {
+                                                console.error('[Download] Failed:', err, cleanUrl);
+                                                // Fallback: try direct link download
+                                                const link = document.createElement('a');
+                                                link.href = cleanUrl;
+                                                link.download = filename;
+                                                link.target = '_blank';
+                                                document.body.appendChild(link);
+                                                link.click();
+                                                document.body.removeChild(link);
+                                            });
                                     }
+                                } else {
+                                    console.warn('[Download] No resultUrl available');
                                 }
                             }}
                             onPointerDown={(e) => e.stopPropagation()}
