@@ -239,15 +239,20 @@ export const ImageEditorModal: React.FC<ImageEditorModalProps> = ({
 
                 <div className="w-0"></div>
 
-                {/* Canvas Area */}
-                <div className="flex-1 flex items-center justify-center bg-black p-8">
+                {/* Canvas Area - constrained to fit within available space */}
+                <div className="flex-1 flex items-center justify-center bg-black p-4 overflow-hidden min-h-0">
                     {localImageUrl ? (
-                        <div ref={imageContainerRef} className="relative">
+                        <div
+                            ref={imageContainerRef}
+                            className="relative max-w-full max-h-full flex items-center justify-center"
+                            style={{ maxHeight: 'calc(100vh - 350px)' }}
+                        >
                             <img
                                 ref={imageRef}
                                 src={localImageUrl}
                                 alt="Editing"
                                 className="max-w-full max-h-full object-contain"
+                                style={{ maxHeight: 'calc(100vh - 350px)' }}
                                 onLoad={(e) => {
                                     const img = e.currentTarget;
                                     const canvas = canvasRef.current;

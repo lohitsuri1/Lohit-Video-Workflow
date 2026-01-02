@@ -234,19 +234,7 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
             )}
           </div>
 
-          {/* Upload Button (bottom right) */}
-          <button
-            className="absolute bottom-4 right-4 w-10 h-10 rounded-full bg-black border border-neutral-700 hover:bg-neutral-900 flex items-center justify-center transition-colors"
-            onClick={(e) => {
-              e.stopPropagation();
-              // TODO: Handle image upload
-              console.log('Upload image to editor');
-            }}
-          >
-            <svg className="w-5 h-5 text-neutral-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 19V5M5 12l7-7 7 7" />
-            </svg>
-          </button>
+
         </div>
       </div>
     );
