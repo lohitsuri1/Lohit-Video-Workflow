@@ -9,6 +9,7 @@ import { TwitterApi } from 'twitter-api-v2';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import sharp from 'sharp';
 
 // ============================================================================
 // TYPES & STATE
@@ -187,8 +188,11 @@ export async function uploadMedia(sessionId, mediaPath, mediaType) {
         throw new Error('Media upload requires OAuth 1.0a credentials. Please add TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, and TWITTER_ACCESS_TOKEN_SECRET to .env');
     }
 
+    // Twitter's max file size for images is 5MB
+    const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
+
     // Read file into buffer
-    const mediaBuffer = fs.readFileSync(mediaPath);
+    let mediaBuffer = fs.readFileSync(mediaPath);
 
     // Determine MIME type
     const ext = path.extname(mediaPath).toLowerCase();
@@ -199,7 +203,38 @@ export async function uploadMedia(sessionId, mediaPath, mediaType) {
         mimeType = ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : 'image/png';
     }
 
-    console.log(`[Twitter] Uploading ${mediaType}: ${mediaPath} (${mimeType})`);
+    // Compress images if they exceed 5MB
+    if (mediaType === 'image' && mediaBuffer.length > MAX_IMAGE_SIZE) {
+        console.log(`[Twitter] Image size ${(mediaBuffer.length / 1024 / 1024).toFixed(2)}MB exceeds 5MB limit, compressing...`);
+
+        try {
+            // Resize and compress the image
+            // First, try reducing quality
+            let quality = 80;
+            let compressed = await sharp(mediaBuffer)
+                .jpeg({ quality })
+                .toBuffer();
+
+            // If still too large, progressively reduce and resize
+            while (compressed.length > MAX_IMAGE_SIZE && quality > 20) {
+                quality -= 10;
+                compressed = await sharp(mediaBuffer)
+                    .resize({ width: 2048, height: 2048, fit: 'inside', withoutEnlargement: true })
+                    .jpeg({ quality })
+                    .toBuffer();
+                console.log(`[Twitter] Compressed to ${(compressed.length / 1024 / 1024).toFixed(2)}MB at quality ${quality}`);
+            }
+
+            mediaBuffer = compressed;
+            mimeType = 'image/jpeg'; // Sharp outputs JPEG after compression
+            console.log(`[Twitter] Final compressed size: ${(mediaBuffer.length / 1024 / 1024).toFixed(2)}MB`);
+        } catch (err) {
+            console.error('[Twitter] Compression failed:', err.message);
+            throw new Error(`Image compression failed: ${err.message}`);
+        }
+    }
+
+    console.log(`[Twitter] Uploading ${mediaType}: ${mediaPath} (${mimeType}, ${(mediaBuffer.length / 1024 / 1024).toFixed(2)}MB)`);
 
     // Upload media using v1 API with OAuth 1.0a
     const mediaId = await oauth1Client.v1.uploadMedia(mediaBuffer, {
@@ -226,9 +261,12 @@ export async function uploadMediaFromUrl(sessionId, mediaUrl, mediaType, library
     // mediaUrl format: /library/images/xxx.png or /library/videos/xxx.mp4
     let mediaPath;
 
-    if (mediaUrl.startsWith('/library/')) {
+    // Strip query parameters (e.g., ?t=123456 cache busting)
+    const cleanUrl = mediaUrl.split('?')[0];
+
+    if (cleanUrl.startsWith('/library/')) {
         // Local library URL
-        const relativePath = mediaUrl.replace('/library/', '');
+        const relativePath = cleanUrl.replace('/library/', '');
         mediaPath = path.join(libraryDir, relativePath);
     } else if (mediaUrl.startsWith('data:')) {
         // Base64 data URL - save to temp file first
