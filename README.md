@@ -300,7 +300,7 @@ Share your generated images and videos directly to Twitter/X:
 4. Add an optional caption
 5. Click **Post** to share!
 
-> **Setup Required**: You need to configure Twitter API credentials in your `.env` file. See [Post to X Documentation](docs/post-to-x.md) for detailed setup instructions.
+> **Rate Limits (Free Tier)**: 17 posts/day, 85 media uploads/day. See [Post to X Documentation](docs/post-to-x.md) for setup instructions.
 
 ## 🔧 Available Scripts
 
