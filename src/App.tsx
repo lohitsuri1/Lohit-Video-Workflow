@@ -42,6 +42,7 @@ import { HistoryPanel } from './components/HistoryPanel';
 import { ChatPanel, ChatBubble } from './components/ChatPanel';
 import { ImageEditorModal } from './components/modals/ImageEditorModal';
 import { VideoEditorModal } from './components/modals/VideoEditorModal';
+import { ExpandedMediaModal } from './components/modals/ExpandedMediaModal';
 import { CreateAssetModal } from './components/modals/CreateAssetModal';
 import { TikTokImportModal } from './components/modals/TikTokImportModal';
 import { TwitterPostModal } from './components/modals/TwitterPostModal';
@@ -1124,37 +1125,10 @@ export default function App() {
       />
 
       {/* Fullscreen Media Preview Modal */}
-      {expandedImageUrl && (
-        <div
-          className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[100] cursor-pointer"
-          onClick={handleCloseExpand}
-        >
-          <button
-            className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
-            onClick={handleCloseExpand}
-          >
-            <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-          {expandedImageUrl.includes('video') || expandedImageUrl.endsWith('.mp4') || expandedImageUrl.endsWith('.webm') ? (
-            <video
-              src={expandedImageUrl}
-              controls
-              autoPlay
-              className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            />
-          ) : (
-            <img
-              src={expandedImageUrl}
-              alt="Fullscreen preview"
-              className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            />
-          )}
-        </div>
-      )}
+      <ExpandedMediaModal
+        mediaUrl={expandedImageUrl}
+        onClose={handleCloseExpand}
+      />
     </div >
   );
 }
