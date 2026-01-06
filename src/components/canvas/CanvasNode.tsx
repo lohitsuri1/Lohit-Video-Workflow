@@ -483,6 +483,137 @@ export const CanvasNode: React.FC<CanvasNodeProps> = ({
                   <line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
               </button>
+              {/* Drag to Chat Handle */}
+              <div
+                draggable
+                onPointerDown={(e) => e.stopPropagation()}
+                onDragStart={(e) => {
+                  e.dataTransfer.setData('application/json', JSON.stringify({
+                    nodeId: data.id,
+                    url: data.resultUrl,
+                    type: 'image'
+                  }));
+                  e.dataTransfer.effectAllowed = 'copy';
+                  onDragStart?.(data.id, true);
+                }}
+                onDragEnd={() => onDragEnd?.()}
+                className="p-1.5 bg-cyan-500/80 hover:bg-cyan-400 rounded-full text-white cursor-grab active:cursor-grabbing"
+                title="Drag to chat"
+              >
+                <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="9" cy="5" r="1" fill="currentColor" />
+                  <circle cx="9" cy="12" r="1" fill="currentColor" />
+                  <circle cx="9" cy="19" r="1" fill="currentColor" />
+                  <circle cx="15" cy="5" r="1" fill="currentColor" />
+                  <circle cx="15" cy="12" r="1" fill="currentColor" />
+                  <circle cx="15" cy="19" r="1" fill="currentColor" />
+                </svg>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Video Toolbar - Appears above the card for Video nodes on hover */}
+        {data.type === NodeType.VIDEO && isSuccess && data.resultUrl && (
+          <div
+            className="absolute -top-20 left-0 right-0 flex justify-center opacity-0 group-hover/nodecard:opacity-100 transition-opacity z-20"
+            style={{
+              transform: `scale(${localScale})`,
+              transformOrigin: 'bottom center'
+            }}
+          >
+            <div className="flex items-center gap-1 px-2 py-1.5 bg-neutral-900/95 rounded-full border border-neutral-700 shadow-xl backdrop-blur-md">
+              {/* Expand Button */}
+              <button
+                onClick={() => onExpand?.(data.resultUrl!)}
+                onPointerDown={(e) => e.stopPropagation()}
+                className="p-1.5 text-neutral-300 hover:bg-neutral-700 hover:text-white rounded-full transition-colors"
+                title="View full size"
+              >
+                <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="15 3 21 3 21 9" />
+                  <polyline points="9 21 3 21 3 15" />
+                  <line x1="21" y1="3" x2="14" y2="10" />
+                  <line x1="3" y1="21" x2="10" y2="14" />
+                </svg>
+              </button>
+              {/* Post to X Button */}
+              <button
+                onClick={(e) => { e.stopPropagation(); onPostToX?.(data.id, data.resultUrl!, 'video'); }}
+                onPointerDown={(e) => e.stopPropagation()}
+                className="p-1.5 text-neutral-300 hover:bg-neutral-700 hover:text-white rounded-full transition-colors"
+                title="Post to X"
+              >
+                <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="currentColor">
+                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                </svg>
+              </button>
+              {/* Download Button */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (data.resultUrl) {
+                    const filename = `video_${data.id}.mp4`;
+                    const cleanUrl = data.resultUrl.split('?')[0];
+                    fetch(cleanUrl, { cache: 'no-store' })
+                      .then(res => res.blob())
+                      .then(blob => {
+                        const url = window.URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = filename;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        window.URL.revokeObjectURL(url);
+                      })
+                      .catch(() => {
+                        const link = document.createElement('a');
+                        link.href = cleanUrl;
+                        link.download = filename;
+                        link.target = '_blank';
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                      });
+                  }
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                className="p-1.5 text-neutral-300 hover:bg-neutral-700 hover:text-white rounded-full transition-colors"
+                title="Download"
+              >
+                <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+              </button>
+              {/* Drag to Chat Handle */}
+              <div
+                draggable
+                onPointerDown={(e) => e.stopPropagation()}
+                onDragStart={(e) => {
+                  e.dataTransfer.setData('application/json', JSON.stringify({
+                    nodeId: data.id,
+                    url: data.resultUrl,
+                    type: 'video'
+                  }));
+                  e.dataTransfer.effectAllowed = 'copy';
+                  onDragStart?.(data.id, true);
+                }}
+                onDragEnd={() => onDragEnd?.()}
+                className="p-1.5 bg-cyan-500/80 hover:bg-cyan-400 rounded-full text-white cursor-grab active:cursor-grabbing"
+                title="Drag to chat"
+              >
+                <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="9" cy="5" r="1" fill="currentColor" />
+                  <circle cx="9" cy="12" r="1" fill="currentColor" />
+                  <circle cx="9" cy="19" r="1" fill="currentColor" />
+                  <circle cx="15" cy="5" r="1" fill="currentColor" />
+                  <circle cx="15" cy="12" r="1" fill="currentColor" />
+                  <circle cx="15" cy="19" r="1" fill="currentColor" />
+                </svg>
+              </div>
             </div>
           </div>
         )}
