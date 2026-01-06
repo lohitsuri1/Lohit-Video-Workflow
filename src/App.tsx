@@ -46,6 +46,7 @@ import { ExpandedMediaModal } from './components/modals/ExpandedMediaModal';
 import { CreateAssetModal } from './components/modals/CreateAssetModal';
 import { TikTokImportModal } from './components/modals/TikTokImportModal';
 import { TwitterPostModal } from './components/modals/TwitterPostModal';
+import { TikTokPostModal } from './components/modals/TikTokPostModal';
 import { AssetLibraryPanel } from './components/AssetLibraryPanel';
 import { useTikTokImport } from './hooks/useTikTokImport';
 
@@ -415,6 +416,20 @@ export default function App() {
     });
   }, []);
 
+  // TikTok Post Modal State
+  const [tiktokModal, setTiktokModal] = useState<{
+    isOpen: boolean;
+    mediaUrl: string | null;
+  }>({ isOpen: false, mediaUrl: null });
+
+  const handlePostToTikTok = React.useCallback((nodeId: string, mediaUrl: string) => {
+    console.log('[TikTok] Opening post modal for:', nodeId, mediaUrl);
+    setTiktokModal({
+      isOpen: true,
+      mediaUrl
+    });
+  }, []);
+
   // Context menu handlers
   const {
     handleDoubleClick,
@@ -780,6 +795,13 @@ export default function App() {
         mediaType={twitterModal.mediaType}
       />
 
+      {/* TikTok Post Modal */}
+      <TikTokPostModal
+        isOpen={tiktokModal.isOpen}
+        onClose={() => setTiktokModal(prev => ({ ...prev, isOpen: false }))}
+        mediaUrl={tiktokModal.mediaUrl}
+      />
+
       {/* Agent Chat */}
       <ChatBubble onClick={toggleChat} isOpen={isChatOpen} />
       <ChatPanel isOpen={isChatOpen} onClose={closeChat} isDraggingNode={isDraggingNodeToChat} canvasTheme={canvasTheme} />
@@ -924,6 +946,7 @@ export default function App() {
                 onMouseLeave={() => setCanvasHoveredNodeId(null)}
                 canvasTheme={canvasTheme}
                 onPostToX={handlePostToX}
+                onPostToTikTok={handlePostToTikTok}
               />
             ))}
           </div>

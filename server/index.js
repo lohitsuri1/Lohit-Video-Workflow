@@ -13,6 +13,7 @@ import { spawn } from 'child_process';
 import chatAgent from './agent/index.js';
 import generationRoutes from './routes/generation.js';
 import twitterRoutes from './routes/twitter.js';
+import tiktokPostRoutes from './routes/tiktok-post.js';
 import { processTikTokVideo, isValidTikTokUrl } from './tools/tiktok.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -222,6 +223,9 @@ app.use('/api', generationRoutes);
 
 // Mount Twitter routes (Post to X feature)
 app.use('/api/twitter', twitterRoutes);
+
+// Mount TikTok routes (Post to TikTok feature)
+app.use('/api/tiktok-post', tiktokPostRoutes);
 
 // NOTE: Old Kling helpers removed - now in server/services/kling.js
 

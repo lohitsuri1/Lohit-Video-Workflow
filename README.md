@@ -18,6 +18,7 @@ A modern, AI-powered canvas application for generating and manipulating images a
 - **💃 Motion Control** - Transfer motion from reference videos to character images (Kling V2.6 via Fal.ai)
 - **📥 TikTok Import** - Download TikTok videos without watermark for use as motion references
 - **📤 Post to X** - Share generated images/videos directly to Twitter/X with one click
+- **📤 Post to TikTok** - Share generated videos directly to TikTok with one click
 - **🖼️ Image-to-Image** - Use reference images for generation
 - **📽️ Frame-to-Frame Video** - Animate between start and end frames
 - **🔗 Smart Node Connections** - Type-aware validation (IMAGE→VIDEO, TEXT→IMAGE, etc.)
@@ -108,6 +109,12 @@ This is not the perfect one, but it is a good start. Give me a try, and let me k
    TWITTER_ACCESS_TOKEN=your_twitter_access_token
    TWITTER_ACCESS_TOKEN_SECRET=your_twitter_access_token_secret
    TWITTER_CALLBACK_URL=http://127.0.0.1:3001/api/twitter/callback
+   
+   # Optional: TikTok Post Feature - Get from https://developers.tiktok.com/
+   # See docs/tiktok-integration.md for detailed setup instructions
+   TIKTOK_CLIENT_KEY=your_tiktok_client_key
+   TIKTOK_CLIENT_SECRET=your_tiktok_client_secret
+   TIKTOK_CALLBACK_URL=https://your-ngrok-url.ngrok-free.app/api/tiktok-post/callback
    ```
    
    > ⚠️ **Security**: API keys are stored server-side only and never exposed to the client.
@@ -181,14 +188,16 @@ TwitCanva/
 │   ├── index.js                  # Express server entry
 │   ├── routes/                   # API route handlers
 │   │   ├── generation.js         # Image/video generation endpoints
-│   │   └── twitter.js            # X (Twitter) posting endpoints
+│   │   ├── twitter.js            # X (Twitter) posting endpoints
+│   │   └── tiktok-post.js        # TikTok posting endpoints
 │   ├── services/                 # External API integrations
 │   │   ├── gemini.js             # Google Gemini/Veo service
 │   │   ├── kling.js              # Kling AI service (V1-V2.5)
 │   │   ├── fal.js                # Fal.ai service (Kling V2.6 Motion Control)
 │   │   ├── hailuo.js             # Hailuo AI (MiniMax) service
 │   │   ├── openai.js             # OpenAI GPT Image service
-│   │   └── twitter.js            # X (Twitter) OAuth & posting service
+│   │   ├── twitter.js            # X (Twitter) OAuth & posting service
+│   │   └── tiktok-post.js        # TikTok OAuth & posting service
 │   ├── tools/                    # Utility tools (non-AI)
 │   │   └── tiktok.js             # TikTok video downloader
 │   ├── utils/                    # Utility functions
@@ -301,6 +310,19 @@ Share your generated images and videos directly to Twitter/X:
 5. Click **Post** to share!
 
 > **Rate Limits (Free Tier)**: 17 posts/day, 85 media uploads/day. See [Post to X Documentation](docs/post-to-x.md) for setup instructions.
+
+#### Post to TikTok
+
+Share your generated videos directly to TikTok:
+
+1. Generate a video using a node
+2. Hover over the video and click the **TikTok icon** button (🎵)
+3. Sign in with your TikTok account (first time only)
+4. Add a caption with hashtags
+5. Select privacy level ("Only Me" for testing)
+6. Click **Post to TikTok**
+
+> **Note**: Unaudited apps can only post to private accounts. See [TikTok Integration Documentation](docs/tiktok-integration.md) for full setup.
 
 ## 🔧 Available Scripts
 
