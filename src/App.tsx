@@ -49,6 +49,8 @@ import { TwitterPostModal } from './components/modals/TwitterPostModal';
 import { TikTokPostModal } from './components/modals/TikTokPostModal';
 import { AssetLibraryPanel } from './components/AssetLibraryPanel';
 import { useTikTokImport } from './hooks/useTikTokImport';
+import { useStoryboardGenerator } from './hooks/useStoryboardGenerator';
+import { StoryboardGeneratorModal } from './components/modals/StoryboardGeneratorModal';
 
 // ============================================================================
 // MAIN COMPONENT
@@ -281,6 +283,12 @@ export default function App() {
     updateNode
   });
 
+  // Keep a ref to handleGenerate so setTimeout callbacks can access the latest version
+  const handleGenerateRef = React.useRef(handleGenerate);
+  React.useEffect(() => {
+    handleGenerateRef.current = handleGenerate;
+  }, [handleGenerate]);
+
   // Create new canvas
   const handleNewCanvas = () => {
     ignoreNextChange.current = true;
@@ -397,6 +405,67 @@ export default function App() {
     nodes,
     setNodes,
     setSelectedNodeIds,
+    viewport
+  });
+
+  // Storyboard Generator Tool
+  const handleCreateStoryboardNodes = React.useCallback((
+    newNodeData: Partial<NodeData>[],
+    groupInfo?: { groupId: string; groupLabel: string }
+  ) => {
+    console.log('[Storyboard] handleCreateStoryboardNodes called with', newNodeData.length, 'nodes, groupInfo:', !!groupInfo);
+    const newNodes: NodeData[] = newNodeData.map(data => ({
+      id: data.id || crypto.randomUUID(),
+      type: data.type || NodeType.IMAGE,
+      x: data.x || 0,
+      y: data.y || 0,
+      prompt: data.prompt || '',
+      status: data.status || NodeStatus.IDLE,
+      model: data.model || 'gpt-image-1.5',
+      imageModel: data.imageModel,
+      aspectRatio: data.aspectRatio || '16:9',
+      resolution: data.resolution || '1K',
+      title: data.title,
+      parentIds: data.parentIds || [],
+      groupId: data.groupId,
+      characterReferenceUrls: data.characterReferenceUrls
+    }));
+
+    setNodes(prev => [...prev, ...newNodes]);
+
+    // Auto-group the storyboard nodes
+    if (groupInfo && newNodes.length > 0) {
+      const newGroup = {
+        id: groupInfo.groupId,
+        nodeIds: newNodes.map(n => n.id),
+        label: groupInfo.groupLabel
+      };
+      setGroups(prev => [...prev, newGroup]);
+    }
+
+    if (newNodes.length > 0) {
+      setSelectedNodeIds(newNodes.map(n => n.id));
+    }
+
+    // Auto-trigger generation for each storyboard node with a small delay
+    // to ensure state is updated before generation starts
+    if (groupInfo) {
+      setTimeout(() => {
+        console.log('[Storyboard] Auto-triggering generation for', newNodes.length, 'nodes');
+        newNodes.forEach((node, index) => {
+          // Stagger generation calls slightly to avoid overwhelming the API
+          setTimeout(() => {
+            console.log(`[Storyboard] Starting generation for node ${index + 1}:`, node.id);
+            // Use ref to get the latest handleGenerate function
+            handleGenerateRef.current(node.id);
+          }, index * 500); // 500ms delay between each node
+        });
+      }, 100); // Initial delay to let state settle
+    }
+  }, [setNodes, setSelectedNodeIds, setGroups]);
+
+  const storyboardGenerator = useStoryboardGenerator({
+    onCreateNodes: handleCreateStoryboardNodes,
     viewport
   });
 
@@ -731,19 +800,22 @@ export default function App() {
 
   return (
     <div className={`w-screen h-screen ${canvasTheme === 'dark' ? 'bg-[#050505] text-white' : 'bg-neutral-50 text-neutral-900'} overflow-hidden select-none font-sans transition-colors duration-300`}>
-      <Toolbar
-        onAddClick={handleToolbarAdd}
-        onWorkflowsClick={handleWorkflowsClick}
-        onHistoryClick={handleHistoryClick}
-        onAssetsClick={handleAssetsClick}
-        onTikTokClick={openTikTokModal}
-        onToolsOpen={() => {
-          closeWorkflowPanel();
-          closeHistoryPanel();
-          closeAssetLibrary();
-        }}
-        canvasTheme={canvasTheme}
-      />
+      {!storyboardGenerator.isModalOpen && !isTikTokModalOpen && (
+        <Toolbar
+          onAddClick={handleToolbarAdd}
+          onWorkflowsClick={handleWorkflowsClick}
+          onHistoryClick={handleHistoryClick}
+          onAssetsClick={handleAssetsClick}
+          onTikTokClick={openTikTokModal}
+          onStoryboardClick={storyboardGenerator.openModal}
+          onToolsOpen={() => {
+            closeWorkflowPanel();
+            closeHistoryPanel();
+            closeAssetLibrary();
+          }}
+          canvasTheme={canvasTheme}
+        />
+      )}
 
       {/* Workflow Panel */}
       <WorkflowPanel
@@ -802,27 +874,52 @@ export default function App() {
         mediaUrl={tiktokModal.mediaUrl}
       />
 
+      {/* Storyboard Generator Modal */}
+      <StoryboardGeneratorModal
+        isOpen={storyboardGenerator.isModalOpen}
+        onClose={storyboardGenerator.closeModal}
+        state={storyboardGenerator.state}
+        onSetStep={storyboardGenerator.setStep}
+        onToggleCharacter={storyboardGenerator.toggleCharacter}
+        onSetSceneCount={storyboardGenerator.setSceneCount}
+        onSetStory={storyboardGenerator.setStory}
+        onUpdateScript={storyboardGenerator.updateScript}
+        onGenerateScripts={storyboardGenerator.generateScripts}
+        onBrainstormStory={storyboardGenerator.brainstormStory}
+        onOptimizeStory={storyboardGenerator.optimizeStory}
+        onGenerateComposite={storyboardGenerator.generateComposite}
+        onRegenerateComposite={storyboardGenerator.regenerateComposite}
+        onCreateNodes={storyboardGenerator.createStoryboardNodes}
+      />
+
       {/* Agent Chat */}
-      <ChatBubble onClick={toggleChat} isOpen={isChatOpen} />
-      <ChatPanel isOpen={isChatOpen} onClose={closeChat} isDraggingNode={isDraggingNodeToChat} canvasTheme={canvasTheme} />
+      {!storyboardGenerator.isModalOpen && !isTikTokModalOpen && (
+        <>
+          <ChatBubble onClick={toggleChat} isOpen={isChatOpen} />
+          <ChatPanel isOpen={isChatOpen} onClose={closeChat} isDraggingNode={isDraggingNodeToChat} canvasTheme={canvasTheme} />
+        </>
+      )}
 
       {/* Top Bar */}
-      <TopBar
-        canvasTitle={canvasTitle}
-        isEditingTitle={isEditingTitle}
-        editingTitleValue={editingTitleValue}
-        canvasTitleInputRef={canvasTitleInputRef}
-        setCanvasTitle={setCanvasTitle}
-        setIsEditingTitle={setIsEditingTitle}
-        setEditingTitleValue={setEditingTitleValue}
-        onSave={handleSaveWithTracking}
-        onNew={handleNewCanvas}
-        hasUnsavedChanges={hasUnsavedChanges}
-        isChatOpen={isChatOpen}
-        canvasTheme={canvasTheme}
-        onToggleTheme={() => setCanvasTheme(prev => prev === 'dark' ? 'light' : 'dark')}
-        lastAutoSaveTime={lastAutoSaveTime}
-      />
+      {/* Top Bar */}
+      {!storyboardGenerator.isModalOpen && !isTikTokModalOpen && (
+        <TopBar
+          canvasTitle={canvasTitle}
+          isEditingTitle={isEditingTitle}
+          editingTitleValue={editingTitleValue}
+          canvasTitleInputRef={canvasTitleInputRef}
+          setCanvasTitle={setCanvasTitle}
+          setIsEditingTitle={setIsEditingTitle}
+          setEditingTitleValue={setEditingTitleValue}
+          onSave={handleSaveWithTracking}
+          onNew={handleNewCanvas}
+          hasUnsavedChanges={hasUnsavedChanges}
+          isChatOpen={isChatOpen}
+          canvasTheme={canvasTheme}
+          onToggleTheme={() => setCanvasTheme(prev => prev === 'dark' ? 'light' : 'dark')}
+          lastAutoSaveTime={lastAutoSaveTime}
+        />
+      )}
 
       {/* Canvas */}
       <div
@@ -1046,19 +1143,22 @@ export default function App() {
       />
 
       {/* Zoom Slider */}
-      < div className={`fixed bottom-6 left-16 rounded-full px-4 py-2 flex items-center gap-3 z-50 transition-colors duration-300 ${canvasTheme === 'dark' ? 'bg-neutral-900 border border-neutral-700' : 'bg-white/90 backdrop-blur-sm border border-neutral-200'}`} >
-        <span className={`text-xs ${canvasTheme === 'dark' ? 'text-neutral-400' : 'text-neutral-500'}`}>Zoom</span>
-        <input
-          type="range"
-          min="0.1"
-          max="2"
-          step="0.1"
-          value={viewport.zoom}
-          onChange={handleSliderZoom}
-          className="w-32"
-        />
-        <span className={`text-xs w-10 ${canvasTheme === 'dark' ? 'text-neutral-300' : 'text-neutral-600'}`}>{Math.round(viewport.zoom * 100)}%</span>
-      </div >
+      {/* Zoom Slider */}
+      {!storyboardGenerator.isModalOpen && !isTikTokModalOpen && (
+        <div className={`fixed bottom-6 left-16 rounded-full px-4 py-2 flex items-center gap-3 z-50 transition-colors duration-300 ${canvasTheme === 'dark' ? 'bg-neutral-900 border border-neutral-700' : 'bg-white/90 backdrop-blur-sm border border-neutral-200'}`} >
+          <span className={`text-xs ${canvasTheme === 'dark' ? 'text-neutral-400' : 'text-neutral-500'}`}>Zoom</span>
+          <input
+            type="range"
+            min="0.1"
+            max="2"
+            step="0.1"
+            value={viewport.zoom}
+            onChange={handleSliderZoom}
+            className="w-32"
+          />
+          <span className={`text-xs w-10 ${canvasTheme === 'dark' ? 'text-neutral-300' : 'text-neutral-600'}`}>{Math.round(viewport.zoom * 100)}%</span>
+        </div>
+      )}
 
       <ImageEditorModal
         isOpen={editorModal.isOpen}

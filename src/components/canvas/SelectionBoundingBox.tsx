@@ -158,12 +158,14 @@ export const SelectionBoundingBox: React.FC<SelectionBoundingBoxProps> = ({
     if (selectedNodes.length === 1 && !group) return null;
 
     // Calculate bounding box from all selected nodes with proper dimensions
-    const PADDING = 50; // Generous padding to ensure all nodes are fully contained
+    const PADDING_X = 50; // Horizontal padding (accounts for + connectors on sides)
+    const PADDING_TOP = 30; // Top padding for node titles
+    const PADDING_BOTTOM = 50; // Bottom padding for controls
 
-    const minX = Math.min(...selectedNodes.map(n => n.x)) - PADDING;
-    const minY = Math.min(...selectedNodes.map(n => n.y)) - PADDING;
-    const maxX = Math.max(...selectedNodes.map(n => n.x + getNodeWidth(n, selectedNodes))) + PADDING;
-    const maxY = Math.max(...selectedNodes.map(n => n.y + getNodeHeight(n, selectedNodes))) + PADDING;
+    const minX = Math.min(...selectedNodes.map(n => n.x)) - PADDING_X;
+    const minY = Math.min(...selectedNodes.map(n => n.y)) - PADDING_TOP;
+    const maxX = Math.max(...selectedNodes.map(n => n.x + getNodeWidth(n, selectedNodes))) + PADDING_X;
+    const maxY = Math.max(...selectedNodes.map(n => n.y + getNodeHeight(n, selectedNodes))) + PADDING_BOTTOM;
 
     const width = maxX - minX;
     const height = maxY - minY;

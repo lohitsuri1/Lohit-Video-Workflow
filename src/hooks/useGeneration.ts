@@ -138,7 +138,16 @@ export const useGeneration = ({ nodes, updateNode }: UseGenerationProps) => {
                     }
                 }
 
-                // Generate image with all parent images
+                // Add character reference URLs from storyboard nodes (for maintaining character consistency)
+                if (node.characterReferenceUrls && node.characterReferenceUrls.length > 0) {
+                    for (const charUrl of node.characterReferenceUrls) {
+                        if (imageBase64s.length < 14) { // Respect Gemini's limit
+                            imageBase64s.push(charUrl);
+                        }
+                    }
+                }
+
+                // Generate image with all parent images and character references
                 const rawResultUrl = await generateImage({
                     prompt: combinedPrompt,
                     aspectRatio: node.aspectRatio,

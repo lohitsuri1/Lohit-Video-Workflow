@@ -101,6 +101,9 @@ export interface NodeData {
   localModelPath?: string;      // Absolute path to model file on disk
   localModelType?: 'diffusion' | 'controlnet' | 'lora' | 'camera-control';
   localModelArchitecture?: string; // Model architecture (e.g., 'sd15', 'sdxl', 'qwen')
+
+  // Storyboard Generator specific
+  characterReferenceUrls?: string[]; // URLs of character images for reference in generation
 }
 
 export interface ContextMenuState {

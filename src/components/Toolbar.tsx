@@ -6,7 +6,8 @@ import {
   History,
   Wrench,
   MoreHorizontal,
-  Plus
+  Plus,
+  Film
 } from 'lucide-react';
 
 // ============================================================================
@@ -35,6 +36,7 @@ interface ToolbarProps {
   onHistoryClick?: (e: React.MouseEvent) => void;
   onAssetsClick?: (e: React.MouseEvent) => void;
   onTikTokClick?: (e: React.MouseEvent) => void;
+  onStoryboardClick?: (e: React.MouseEvent) => void;
   onToolsOpen?: () => void; // Called when tools dropdown opens to close other panels
   canvasTheme?: 'dark' | 'light';
 }
@@ -49,6 +51,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   onHistoryClick,
   onAssetsClick,
   onTikTokClick,
+  onStoryboardClick,
   onToolsOpen,
   canvasTheme = 'dark'
 }) => {
@@ -121,8 +124,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         <div className="relative" ref={toolsRef}>
           <button
             className={`hover:scale-125 transition-all duration-200 ${isDark
-                ? `text-neutral-400 hover:text-white ${isToolsOpen ? 'text-white' : ''}`
-                : `text-neutral-500 hover:text-neutral-900 ${isToolsOpen ? 'text-neutral-900' : ''}`
+              ? `text-neutral-400 hover:text-white ${isToolsOpen ? 'text-white' : ''}`
+              : `text-neutral-500 hover:text-neutral-900 ${isToolsOpen ? 'text-neutral-900' : ''}`
               }`}
             onClick={() => {
               if (!isToolsOpen) {
@@ -153,12 +156,20 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 </div>
               </button>
 
-              {/* Placeholder for future tools */}
-              <div className={`mt-1 pt-1 ${isDark ? 'border-t border-neutral-800' : 'border-t border-neutral-200'}`}>
-                <div className={`px-3 py-2 text-xs italic ${isDark ? 'text-neutral-600' : 'text-neutral-400'}`}>
-                  More tools coming soon...
+              {/* Storyboard Generator */}
+              <button
+                onClick={handleToolClick(onStoryboardClick)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 transition-colors group ${isDark ? 'hover:bg-neutral-800' : 'hover:bg-neutral-100'
+                  }`}
+              >
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                  <Film size={16} className="text-white" />
                 </div>
-              </div>
+                <div className="text-left">
+                  <p className={`text-sm ${isDark ? 'text-neutral-200 group-hover:text-white' : 'text-neutral-700 group-hover:text-neutral-900'}`}>Storyboard Generator</p>
+                  <p className={`text-xs ${isDark ? 'text-neutral-500' : 'text-neutral-400'}`}>Create scenes with AI</p>
+                </div>
+              </button>
             </div>
           )}
         </div>
