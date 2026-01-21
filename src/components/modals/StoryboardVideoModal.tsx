@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Sparkles, Film, Loader2, Play, Check, ChevronDown, Wand2 } from 'lucide-react';
+import { X, Sparkles, Film, Loader2, Play, Check, ChevronDown, Wand2, Trash2 } from 'lucide-react';
 import { NodeData } from '../../types';
 import { GoogleIcon, KlingIcon, HailuoIcon } from '../icons/BrandIcons';
 
@@ -20,40 +20,110 @@ interface StoryboardVideoModalProps {
             model: string;
             duration: number;
             resolution: string;
-        }
+        },
+        activeNodeIds: string[]
     ) => void;
+    storyContext?: {
+        story: string;
+        scripts: any[];
+    };
 }
 
+// Video durations in seconds
+const VIDEO_DURATIONS = [5, 6, 8, 10];
+const VIDEO_RESOLUTIONS = ["Auto", "1080p", "768p", "720p", "512p"];
+
 const VIDEO_MODELS = [
-    { id: 'veo-3.1', name: 'Veo 3.1', provider: 'google', durations: [4, 6, 8] },
-    { id: 'kling-v2-1', name: 'Kling V2.1', provider: 'kling', recommended: true, durations: [5, 10] },
-    { id: 'kling-v2-1-master', name: 'Kling V2.1 Master', provider: 'kling', durations: [5, 10] },
-    { id: 'kling-v2-5-turbo', name: 'Kling V2.5 Turbo', provider: 'kling', durations: [5, 10] },
-    { id: 'kling-v2-6', name: 'Kling 2.6 (Motion)', provider: 'kling', durations: [5, 10] },
-    { id: 'hailuo-2.3', name: 'Hailuo 2.3', provider: 'hailuo', durations: [5] },
-    { id: 'hailuo-2.3-fast', name: 'Hailuo 2.3 Fast', provider: 'hailuo', durations: [5] },
-    { id: 'hailuo-02', name: 'Hailuo 02', provider: 'hailuo', durations: [5] },
+    {
+        id: 'veo-3.1',
+        name: 'Veo 3.1',
+        provider: 'google',
+        durations: [4, 6, 8],
+        resolutions: ['Auto', '720p', '1080p'],
+        // Explicitly map durations to allowed resolutions to prevent API errors
+        durationResolutionMap: {
+            4: ['Auto', '720p'],
+            6: ['Auto', '720p'],
+            8: ['Auto', '720p', '1080p']
+        }
+    },
+    { id: 'kling-v2-1', name: 'Kling V2.1', provider: 'kling', recommended: true, durations: [5, 10], resolutions: ['Auto', '720p', '1080p'] },
+    { id: 'kling-v2-1-master', name: 'Kling V2.1 Master', provider: 'kling', durations: [5, 10], resolutions: ['Auto', '720p', '1080p'] },
+    { id: 'kling-v2-5-turbo', name: 'Kling V2.5 Turbo', provider: 'kling', durations: [5, 10], resolutions: ['Auto', '720p', '1080p'] },
+    { id: 'kling-v2-6', name: 'Kling 2.6 (Motion)', provider: 'kling', durations: [5, 10], resolutions: ['Auto', '720p', '1080p'] },
+    { id: 'hailuo-2.3', name: 'Hailuo 2.3', provider: 'hailuo', durations: [5], resolutions: ['768p', '1080p'] },
+    { id: 'hailuo-2.3-fast', name: 'Hailuo 2.3 Fast', provider: 'hailuo', durations: [5], resolutions: ['768p', '1080p'] },
+    { id: 'hailuo-02', name: 'Hailuo 02', provider: 'hailuo', durations: [5], resolutions: ['768p', '1080p'] },
 ];
 
 export const StoryboardVideoModal: React.FC<StoryboardVideoModalProps> = ({
     isOpen,
     onClose,
     scenes,
-    onCreateVideos
+    onCreateVideos,
+    storyContext
 }) => {
-    // Sort scenes by X position to maintain story order
-    const sortedScenes = [...scenes].sort((a, b) => a.x - b.x);
+    // Track removed scenes (locally within modal session)
+    const [removedSceneIds, setRemovedSceneIds] = useState<Set<string>>(new Set());
+
+    // Reset removed scenes when modal opens/closes or scenes change significantly
+    useEffect(() => {
+        if (isOpen) {
+            setRemovedSceneIds(new Set());
+        }
+    }, [isOpen]);
+
+    // Filter out removed scenes, then sort by X position
+    const activeScenes = scenes.filter(s => !removedSceneIds.has(s.id));
+    const sortedScenes = [...activeScenes].sort((a, b) => a.x - b.x);
 
     const [prompts, setPrompts] = useState<Record<string, string>>({});
     const [settings, setSettings] = useState({
         model: 'veo-3.1',
-        duration: 5,
-        resolution: '1080p' // Default for Veo
+        duration: 4, // Default to 4s for Veo
+        resolution: '720p' // Safe default
     });
     const [generatingPrompts, setGeneratingPrompts] = useState<Record<string, boolean>>({});
     const [optimizingPrompts, setOptimizingPrompts] = useState<Record<string, boolean>>({});
     const [showModelDropdown, setShowModelDropdown] = useState(false);
     const modelDropdownRef = useRef<HTMLDivElement>(null);
+
+    // Dynamic resolution options based on model and duration
+    const currentModel = VIDEO_MODELS.find(m => m.id === settings.model) || VIDEO_MODELS[0];
+    const availableResolutions = (currentModel as any).durationResolutionMap?.[settings.duration]
+        || currentModel.resolutions
+        || VIDEO_RESOLUTIONS;
+
+    // Ensure settings are valid when model/duration changes
+    useEffect(() => {
+        const model = VIDEO_MODELS.find(m => m.id === settings.model);
+        if (!model) return;
+
+        let newDuration = settings.duration;
+        let newResolution = settings.resolution;
+        let changed = false;
+
+        // Validation for Duration
+        if (!model.durations.includes(newDuration)) {
+            newDuration = model.durations[0];
+            changed = true;
+        }
+
+        // Validation for Resolution
+        const allowedResolutions = (model as any).durationResolutionMap?.[newDuration] || model.resolutions || VIDEO_RESOLUTIONS;
+        if (!allowedResolutions.includes(newResolution) && !allowedResolutions.includes('Auto')) {
+            // If current resolution not allowed, pick first allowed
+            // Favor '720p' or '1080p' if available, else first
+            if (allowedResolutions.includes('720p')) newResolution = '720p';
+            else if (allowedResolutions.includes('1080p')) newResolution = '1080p';
+            else newResolution = allowedResolutions[0];
+            changed = true;
+        }
+
+        if (changed) {
+            setSettings(prev => ({ ...prev, duration: newDuration, resolution: newResolution }));
+        }
+    }, [settings.model, settings.duration, settings.resolution]);
 
     // Initial settings sync
     useEffect(() => {
@@ -101,13 +171,29 @@ export const StoryboardVideoModal: React.FC<StoryboardVideoModalProps> = ({
 
         try {
             // Using a simple text generation endpoint that supports image input
-            // We'll treat this as "Describe this image for video generation"
+            // Construct a context-rich prompt
+            let systemPrompt = "Describe this image in detail to be used as a prompt for video generation. Focus on the action, movement, and atmosphere. Keep it under 50 words.";
+
+            if (storyContext) {
+                systemPrompt += `\n\nContext from Story: "${storyContext.story}"`;
+                // Try to find specific script info if possible (assuming index matches or title match)
+                const sceneIndex = sortedScenes.findIndex(s => s.id === nodeId);
+                if (sceneIndex !== -1 && storyContext.scripts[sceneIndex]) {
+                    const script = storyContext.scripts[sceneIndex];
+                    console.log(`[StoryboardModal] Injecting script for scene #${sceneIndex + 1}:`, script.description);
+                    systemPrompt += `\n\nScene Script: ${script.description}`;
+                    if (script.cameraAngle) systemPrompt += `\nCamera: ${script.cameraAngle} ${script.cameraMovement ? `(${script.cameraMovement})` : ''}`;
+                    if (script.lighting) systemPrompt += `\nLighting: ${script.lighting}`;
+                    if (script.mood) systemPrompt += `\nMood: ${script.mood}`;
+                }
+            }
+
             const response = await fetch('/api/gemini/describe-image', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     imageUrl: scene.resultUrl,
-                    prompt: "Describe this image in detail to be used as a prompt for video generation. Focus on the action, movement, and atmosphere. Keep it under 50 words."
+                    prompt: systemPrompt
                 })
             });
 
@@ -151,20 +237,41 @@ export const StoryboardVideoModal: React.FC<StoryboardVideoModalProps> = ({
         }
     };
 
+    const handleRemoveScene = (nodeId: string) => {
+        setRemovedSceneIds(prev => {
+            const newSet = new Set(prev);
+            newSet.add(nodeId);
+            return newSet;
+        });
+    };
+
     const handleModelChange = (modelId: string) => {
         const newModel = VIDEO_MODELS.find(m => m.id === modelId);
         if (!newModel) return;
 
-        setSettings(prev => ({
-            ...prev,
+        // Determine new duration: keep current if valid, else first available
+        let newDuration = settings.duration;
+        if (!newModel.durations.includes(newDuration)) {
+            newDuration = newModel.durations[0];
+        }
+
+        // Determine new resolution
+        let newResolution = settings.resolution;
+        const availableRes = (newModel as any).durationResolutionMap?.[newDuration] || newModel.resolutions || VIDEO_RESOLUTIONS;
+        if (!availableRes.includes(newResolution) && availableRes.length > 0) {
+            newResolution = availableRes[0];
+        }
+
+        setSettings({
             model: modelId,
-            // Reset duration if not supported
-            duration: newModel.durations.includes(prev.duration) ? prev.duration : newModel.durations[0]
-        }));
+            duration: newDuration,
+            resolution: newResolution
+        });
         setShowModelDropdown(false);
     };
 
-    const currentModel = VIDEO_MODELS.find(m => m.id === settings.model) || VIDEO_MODELS[0];
+    // Use currentModel derived from settings state
+    // ...
 
     if (!isOpen) return null;
 
@@ -196,69 +303,86 @@ export const StoryboardVideoModal: React.FC<StoryboardVideoModalProps> = ({
 
                 {/* Content - Scrollable List of Scenes */}
                 <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                    {sortedScenes.map((scene, index) => (
-                        <div key={scene.id} className="flex gap-4 bg-neutral-900/50 border border-neutral-800 rounded-xl p-4 hover:border-neutral-700 transition-colors">
-                            {/* Scene Image Helper */}
-                            <div className="w-48 aspect-video bg-black rounded-lg overflow-hidden border border-neutral-800 shrink-0 relative group">
-                                {scene.resultUrl ? (
-                                    <img src={scene.resultUrl} alt={`Scene ${index + 1}`} className="w-full h-full object-cover" />
-                                ) : (
-                                    <div className="w-full h-full flex items-center justify-center text-neutral-700">No Image</div>
-                                )}
-                                <div className="absolute top-2 left-2 px-2 py-0.5 bg-black/60 backdrop-blur-md rounded text-[10px] font-medium text-white border border-white/10">
-                                    Scene {index + 1}
-                                </div>
-                            </div>
+                    {sortedScenes.length === 0 ? (
+                        <div className="text-center text-neutral-500 py-12">
+                            No scenes available or all selected scenes removed.
+                        </div>
+                    ) : (
+                        sortedScenes.map((scene, index) => (
+                            <div key={scene.id} className="flex gap-2 items-center group/card">
+                                {/* Remove Button - Left side */}
+                                <button
+                                    onClick={() => handleRemoveScene(scene.id)}
+                                    className="p-2 text-neutral-600 hover:text-red-400 hover:bg-neutral-800/50 rounded-full transition-all opacity-0 group-hover/card:opacity-100 flex-shrink-0"
+                                    title="Remove scene"
+                                >
+                                    <Trash2 size={16} />
+                                </button>
 
-                            {/* Prompt Input Area */}
-                            <div className="flex-1 flex flex-col gap-2 relative">
-                                <div className="flex justify-between items-center">
-                                    <label className="text-xs font-medium text-neutral-400">Video Prompt</label>
-                                    <div className="flex items-center gap-2">
-                                        <button
-                                            onClick={() => handleOptimizePrompt(scene.id)}
-                                            disabled={generatingPrompts[scene.id] || optimizingPrompts[scene.id] || !prompts[scene.id]}
-                                            className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors disabled:opacity-50"
-                                            title="Enhance your prompt with AI"
-                                        >
-                                            {optimizingPrompts[scene.id] ? (
-                                                <Loader2 size={12} className="animate-spin" />
-                                            ) : (
-                                                <Wand2 size={12} />
+                                <div className="flex-1 flex gap-4 bg-neutral-900/50 border border-neutral-800 rounded-xl p-4 hover:border-neutral-700 transition-colors">
+                                    {/* Scene Image Helper */}
+                                    <div className="w-48 aspect-video bg-black rounded-lg overflow-hidden border border-neutral-800 shrink-0 relative group">
+                                        {scene.resultUrl ? (
+                                            <img src={scene.resultUrl} alt={`Scene ${index + 1}`} className="w-full h-full object-cover" />
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center text-neutral-700">No Image</div>
+                                        )}
+                                        <div className="absolute top-2 left-2 px-2 py-0.5 bg-black/60 backdrop-blur-md rounded text-[10px] font-medium text-white border border-white/10">
+                                            Scene {index + 1}
+                                        </div>
+                                    </div>
+
+                                    {/* Prompt Input Area */}
+                                    <div className="flex-1 flex flex-col gap-2 relative">
+                                        <div className="flex justify-between items-center">
+                                            <label className="text-xs font-medium text-neutral-400">Video Prompt</label>
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    onClick={() => handleOptimizePrompt(scene.id)}
+                                                    disabled={generatingPrompts[scene.id] || optimizingPrompts[scene.id] || !prompts[scene.id]}
+                                                    className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors disabled:opacity-50"
+                                                    title="Enhance your prompt with AI"
+                                                >
+                                                    {optimizingPrompts[scene.id] ? (
+                                                        <Loader2 size={12} className="animate-spin" />
+                                                    ) : (
+                                                        <Wand2 size={12} />
+                                                    )}
+                                                    Optimize
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div className="relative flex-1">
+                                            <textarea
+                                                value={prompts[scene.id] || ''}
+                                                onChange={(e) => setPrompts(prev => ({ ...prev, [scene.id]: e.target.value }))}
+                                                placeholder="Describe the motion for this scene (e.g., 'Slow pan right, character smiles')..."
+                                                className="w-full h-full min-h-[100px] bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-sm text-neutral-200 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20 resize-none"
+                                            />
+
+                                            {/* Auto-Generate Overlay Button */}
+                                            {(!prompts[scene.id] || prompts[scene.id].trim() === '') && (
+                                                <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+                                                    <button
+                                                        onClick={() => handleGeneratePrompt(scene.id)}
+                                                        disabled={generatingPrompts[scene.id]}
+                                                        className="pointer-events-auto flex items-center gap-2 text-purple-400 hover:text-purple-300 hover:scale-105 transition-all opacity-80 hover:opacity-100"
+                                                    >
+                                                        {generatingPrompts[scene.id] ? (
+                                                            <Loader2 size={14} className="animate-spin" />
+                                                        ) : (
+                                                            <Sparkles size={14} />
+                                                        )}
+                                                        <span className="text-sm font-medium">Auto-Generate</span>
+                                                    </button>
+                                                </div>
                                             )}
-                                            Optimize
-                                        </button>
+                                        </div>
                                     </div>
                                 </div>
-                                <div className="relative flex-1">
-                                    <textarea
-                                        value={prompts[scene.id] || ''}
-                                        onChange={(e) => setPrompts(prev => ({ ...prev, [scene.id]: e.target.value }))}
-                                        placeholder="Describe the motion for this scene (e.g., 'Slow pan right, character smiles')..."
-                                        className="w-full h-full min-h-[100px] bg-neutral-950 border border-neutral-800 rounded-lg p-3 text-sm text-neutral-200 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20 resize-none"
-                                    />
-
-                                    {/* Auto-Generate Overlay Button */}
-                                    {(!prompts[scene.id] || prompts[scene.id].trim() === '') && (
-                                        <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
-                                            <button
-                                                onClick={() => handleGeneratePrompt(scene.id)}
-                                                disabled={generatingPrompts[scene.id]}
-                                                className="pointer-events-auto flex items-center gap-2 text-purple-400 hover:text-purple-300 hover:scale-105 transition-all opacity-80 hover:opacity-100"
-                                            >
-                                                {generatingPrompts[scene.id] ? (
-                                                    <Loader2 size={14} className="animate-spin" />
-                                                ) : (
-                                                    <Sparkles size={14} />
-                                                )}
-                                                <span className="text-sm font-medium">Auto-Generate</span>
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
                             </div>
-                        </div>
-                    ))}
+                        ))
+                    )}
                 </div>
 
                 {/* Footer - Global Settings & Action */}
@@ -356,16 +480,30 @@ export const StoryboardVideoModal: React.FC<StoryboardVideoModalProps> = ({
                                     ))}
                                 </select>
                             </div>
+
+                            {/* Resolution Selector */}
+                            <div className="flex flex-col gap-1">
+                                <label className="text-[10px] uppercase font-bold text-neutral-500 tracking-wider">Resolution</label>
+                                <select
+                                    value={settings.resolution}
+                                    onChange={(e) => setSettings(prev => ({ ...prev, resolution: e.target.value }))}
+                                    className="bg-neutral-800 text-white text-xs px-3 py-2 rounded-lg border border-neutral-700 focus:outline-none focus:border-purple-500 min-w-[80px]"
+                                >
+                                    {availableResolutions.map(res => (
+                                        <option key={res} value={res}>{res}</option>
+                                    ))}
+                                </select>
+                            </div>
                         </div>
 
                         {/* Generate Action */}
                         <div className="flex items-center gap-3">
                             <div className="text-right mr-2">
                                 <div className="text-xs text-neutral-400">Est. cost</div>
-                                <div className="text-sm font-medium text-white">~{(scenes.length * 0.1 * (settings.duration / 5)).toFixed(2)} credits</div>
+                                <div className="text-sm font-medium text-white">~{(sortedScenes.length * 0.1 * (settings.duration / 5)).toFixed(2)} credits</div>
                             </div>
                             <button
-                                onClick={() => onCreateVideos(prompts, settings)}
+                                onClick={() => onCreateVideos(prompts, settings, sortedScenes.map(s => s.id))}
                                 className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white pl-4 pr-5 py-2.5 rounded-xl text-sm font-medium transition-all shadow-lg shadow-purple-900/40 flex items-center gap-2"
                             >
                                 <Play size={16} fill="currentColor" />

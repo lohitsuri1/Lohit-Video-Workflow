@@ -18,6 +18,7 @@ interface SelectionBoundingBoxProps {
     onRenameGroup?: (groupId: string, newLabel: string) => void;
     onSortNodes?: (direction: 'horizontal' | 'vertical' | 'grid') => void;
     onCreateVideo?: () => void;
+    onEditStoryboard?: (groupId: string) => void;
 }
 
 // ============================================================================
@@ -145,7 +146,8 @@ export const SelectionBoundingBox: React.FC<SelectionBoundingBoxProps> = ({
     onBoundingBoxPointerDown,
     onRenameGroup,
     onSortNodes,
-    onCreateVideo
+    onCreateVideo,
+    onEditStoryboard
 }) => {
     // ============================================================================
     // STATE
@@ -399,6 +401,23 @@ export const SelectionBoundingBox: React.FC<SelectionBoundingBoxProps> = ({
                         </svg>
                         Ungroup
                     </button>
+
+                    {/* Edit Storyboard Button (only for storyboards) */}
+                    {group.storyContext && (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                if (onEditStoryboard) onEditStoryboard(group.id);
+                            }}
+                            className="bg-neutral-800 hover:bg-neutral-700 border border-neutral-600 text-white text-sm px-4 py-2.5 rounded flex items-center gap-2 transition-colors mr-2"
+                        >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                            </svg>
+                            Edit Storyboard
+                        </button>
+                    )}
 
                     {/* Create Video Button */}
                     <button

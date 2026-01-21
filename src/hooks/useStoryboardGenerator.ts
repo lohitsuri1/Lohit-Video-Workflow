@@ -51,6 +51,15 @@ export interface StoryboardState {
 interface StoryboardGroupInfo {
     groupId: string;
     groupLabel: string;
+    storyContext?: {
+        story: string;
+        scripts: SceneScript[];
+        selectedCharacters?: CharacterAsset[];
+        sceneCount?: number;
+        styleAnchor?: string;
+        characterDNA?: Record<string, string>;
+        compositeImageUrl?: string | null;
+    };
 }
 
 interface UseStoryboardGeneratorProps {
@@ -408,19 +417,46 @@ export const useStoryboardGenerator = ({ onCreateNodes, viewport }: UseStoryboar
         // Pass the group info along with nodes for App.tsx to create the group
         onCreateNodes(newNodes, {
             groupId: storyboardGroupId,
-            groupLabel: `Storyboard ${new Date().toLocaleTimeString()}`
+            groupLabel: `Storyboard ${new Date().toLocaleTimeString()}`,
+            storyContext: {
+                story: state.story,
+                scripts: state.scripts,
+                selectedCharacters: state.selectedCharacters,
+                sceneCount: state.sceneCount,
+                styleAnchor: state.styleAnchor,
+                characterDNA: state.characterDNA,
+                compositeImageUrl: state.compositeImageUrl
+            }
         });
         closeModal();
     }, [state.scripts, state.selectedCharacters, state.styleAnchor, state.compositeImageUrl, viewport, onCreateNodes, closeModal]);
 
-    // ============================================================================
-    // RETURN
-    // ============================================================================
+    // Restore state from saved context to edit an existing storyboard
+    const editStoryboard = useCallback((context: NonNullable<StoryboardGroupInfo['storyContext']>) => {
+        const hasComposite = !!context.compositeImageUrl;
+        setState({
+            step: hasComposite ? 'preview' : 'scripts', // Only jump to preview if we have the image, otherwise go to scripts to avoid auto-regen
+            selectedCharacters: context.selectedCharacters || [],
+            sceneCount: context.sceneCount || 3,
+            story: context.story,
+            scripts: context.scripts,
+            styleAnchor: context.styleAnchor || '',
+            characterDNA: context.characterDNA || {},
+            compositeImageUrl: context.compositeImageUrl || null,
+            isGeneratingPreview: false,
+            isGenerating: false,
+            isBrainstorming: false,
+            isOptimizing: false,
+            error: null
+        });
+        setIsModalOpen(true);
+    }, []);
 
     return {
         isModalOpen,
         openModal,
         closeModal,
+        editStoryboard,
         state,
         setStep,
         setSelectedCharacters,

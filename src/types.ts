@@ -134,4 +134,13 @@ export interface NodeGroup {
   id: string;
   nodeIds: string[];
   label: string;
+  storyContext?: {
+    story: string;
+    scripts: any[];
+    selectedCharacters?: any[]; // CharacterAsset[]
+    sceneCount?: number;
+    styleAnchor?: string;
+    characterDNA?: Record<string, string>;
+    compositeImageUrl?: string | null;
+  };
 }

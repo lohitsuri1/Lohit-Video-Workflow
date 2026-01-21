@@ -440,7 +440,9 @@ export default function App() {
       const newGroup = {
         id: groupInfo.groupId,
         nodeIds: newNodes.map(n => n.id),
-        label: groupInfo.groupLabel
+        label: groupInfo.groupLabel,
+        // Save story context if available to help AI understand the full narrative later
+        storyContext: (groupInfo as any).storyContext
       };
       setGroups(prev => [...prev, newGroup]);
     }
@@ -471,10 +473,19 @@ export default function App() {
     viewport
   });
 
+  const handleEditStoryboard = React.useCallback((groupId: string) => {
+    const group = groups.find(g => g.id === groupId);
+    if (group?.storyContext) {
+      console.log('[App] Editing storyboard:', groupId);
+      storyboardGenerator.editStoryboard(group.storyContext);
+    }
+  }, [groups, storyboardGenerator]);
+
   // Storyboard Video Modal State
   const [storyboardVideoModal, setStoryboardVideoModal] = useState<{
     isOpen: boolean;
     nodes: NodeData[];
+    storyContext?: { story: string; scripts: any[] };
   }>({ isOpen: false, nodes: [] });
 
   const handleCreateStoryboardVideo = React.useCallback((targetNodeIds?: string[]) => {
@@ -489,35 +500,67 @@ export default function App() {
       return;
     }
 
+    // Check if nodes belong to a group with story context
+    const firstNode = selectedImageNodes[0];
+    const group = firstNode.groupId ? groups.find(g => g.id === firstNode.groupId) : undefined;
+    const storyContext = group?.storyContext;
+
+    if (storyContext) {
+      console.log('[App] Found Story Context for Video Modal:', {
+        storyLength: storyContext.story.length,
+        scriptsCount: storyContext.scripts.length
+      });
+    }
+
     setStoryboardVideoModal({
       isOpen: true,
-      nodes: selectedImageNodes
+      nodes: selectedImageNodes,
+      storyContext
     });
-  }, [nodes, selectedNodeIds]);
+  }, [nodes, selectedNodeIds, groups]);
 
   const handleGenerateStoryVideos = React.useCallback((
     prompts: Record<string, string>,
-    settings: { model: string; duration: number; resolution: string; }
+    settings: { model: string; duration: number; resolution: string; },
+    activeNodeIds?: string[]
   ) => {
     // Close modal
     setStoryboardVideoModal(prev => ({ ...prev, isOpen: false }));
 
     const newNodes: NodeData[] = [];
-    const sourceNodes = storyboardVideoModal.nodes;
+    // Use activeNodeIds to filter source nodes if provided, otherwise use all
+    const sourceNodes = activeNodeIds
+      ? storyboardVideoModal.nodes.filter(n => activeNodeIds.includes(n.id))
+      : storyboardVideoModal.nodes;
 
-    sourceNodes.forEach(sourceNode => {
+    // Calculate layout bounds of the ENTIRE storyboard to position videos to the RIGHT
+    // Use all storyboard nodes to properly calculate the bounding box
+    const allStoryboardNodes = storyboardVideoModal.nodes;
+
+    // Assume a default width if not present (though images usually have it)
+    const DEFAULT_WIDTH = 400;
+
+    // Find the rightmost edge of the entire group
+    const groupMaxX = Math.max(...allStoryboardNodes.map(n => n.x + ((n as any).width || DEFAULT_WIDTH)));
+
+    // Calculate the left edge of the group to maintain relative offsets
+    const groupMinX = Math.min(...allStoryboardNodes.map(n => n.x));
+
+    // Shift Amount: Move everything to the right of the group with a gap
+    const GAP_X = 100;
+    const xOffset = groupMaxX + GAP_X - groupMinX;
+
+    sourceNodes.forEach((sourceNode) => {
       // Create a new Video node for each image
       const newNodeId = crypto.randomUUID();
       const PROMPT = prompts[sourceNode.id] || sourceNode.prompt || 'Animated video';
 
-      // Position video node below the image node
-      const GAP_Y = 400; // Enough space for the image node height
-
       const newVideoNode: NodeData = {
         id: newNodeId,
         type: NodeType.VIDEO,
-        x: sourceNode.x,
-        y: sourceNode.y + GAP_Y,
+        // Clone the layout pattern but shifted to the right
+        x: sourceNode.x + xOffset,
+        y: sourceNode.y,
         prompt: PROMPT,
         status: NodeStatus.IDLE, // Will switch to LOADING when generated
         model: settings.model,
@@ -526,7 +569,7 @@ export default function App() {
         aspectRatio: sourceNode.aspectRatio || '16:9',
         resolution: settings.resolution,
         parentIds: [sourceNode.id], // Connect to source image
-        groupId: sourceNode.groupId, // Setup in same group
+        // groupId: undefined, // Explicitly NOT in the group
         videoMode: 'frame-to-frame', // Important for image-to-video
         inputUrl: sourceNode.resultUrl, // Pass image as input
       };
@@ -1152,6 +1195,7 @@ export default function App() {
                 const group = getCommonGroup(selectedNodeIds);
                 if (group) sortGroupNodes(group.id, direction, nodes, setNodes);
               }}
+              onEditStoryboard={handleEditStoryboard}
             />
           )}
 
@@ -1191,6 +1235,7 @@ export default function App() {
                   const groupNodeIds = nodes.filter(n => n.groupId === group.id).map(n => n.id);
                   handleCreateStoryboardVideo(groupNodeIds);
                 }}
+                onEditStoryboard={handleEditStoryboard}
               />
             );
           })}
@@ -1332,6 +1377,7 @@ export default function App() {
         isOpen={storyboardVideoModal.isOpen}
         onClose={() => setStoryboardVideoModal(prev => ({ ...prev, isOpen: false }))}
         scenes={storyboardVideoModal.nodes}
+        storyContext={storyboardVideoModal.storyContext}
         onCreateVideos={handleGenerateStoryVideos}
       />
 

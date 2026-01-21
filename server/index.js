@@ -618,6 +618,10 @@ app.post('/api/gemini/describe-image', async (req, res) => {
     try {
         const { imageUrl, prompt } = req.body;
         console.log(`[Gemini DescribeV2] Request received. imageUrl: ${imageUrl ? (imageUrl.length > 100 ? imageUrl.substring(0, 100) + '...' : imageUrl) : 'missing'}`);
+        // DEBUG: Verify story context injection
+        if (prompt) {
+            console.log('[Gemini DescribeV2] Received Prompt:', prompt);
+        }
 
         if (!imageUrl) {
             return res.status(400).json({ error: 'Image URL is required' });
