@@ -54,6 +54,19 @@ function mapResolution(resolution) {
     return mapping[resolution] || '768P';
 }
 
+/**
+ * Map duration to Hailuo supported values (6s, 10s)
+ */
+function mapHailuoDuration(duration) {
+    const numDuration = parseInt(duration || 6);
+    // Hailuo supports 6s and 10s.
+    // If request is closer to 10 (> 8), use 10. Otherwise default to 6.
+    if (numDuration > 8) {
+        return 10;
+    }
+    return 6;
+}
+
 // ============================================================================
 // POLLING
 // ============================================================================
@@ -176,6 +189,7 @@ export async function generateHailuoVideo({
     const hasLastFrame = !!lastFrameBase64;
     const modelName = mapHailuoModelName(modelId, hasFirstFrame, hasLastFrame);
     const mappedResolution = mapResolution(resolution);
+    const mappedDuration = mapHailuoDuration(duration);
 
     // Map aspect ratio - default to 16:9
     const mappedAspectRatio = aspectRatio === '9:16' ? '9:16' : '16:9';
@@ -184,7 +198,7 @@ export async function generateHailuoVideo({
     const body = {
         model: modelName,
         prompt: prompt || '',
-        duration: duration || 6,
+        duration: mappedDuration,
         resolution: mappedResolution,
         aspect_ratio: mappedAspectRatio
     };

@@ -44,7 +44,7 @@ async function retryOperation(operation, maxRetries = 3, initialDelayMs = 2000) 
  */
 router.post('/generate-scripts', async (req, res) => {
     try {
-        const { story, characterDescriptions, sceneCount, characterImages } = req.body;
+        const { story, characterDescriptions, sceneCount, referenceImages, characterImages } = req.body;
         const { GEMINI_API_KEY } = req.app.locals;
         const { resolveImageToBase64 } = await import('../utils/imageHelpers.js');
 
@@ -74,8 +74,44 @@ router.post('/generate-scripts', async (req, res) => {
         const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
         const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
-        // Build character context with emphasis on visual details
-        const characterContext = characterDescriptions && characterDescriptions.length > 0
+        // Categorize reference images
+        const refs = referenceImages || [];
+        const characterRefs = refs.filter(r => r.category === 'Character');
+        const sceneRefs = refs.filter(r => r.category === 'Scene');
+        const itemRefs = refs.filter(r => r.category === 'Item');
+        const styleRefs = refs.filter(r => r.category === 'Style');
+        const otherRefs = refs.filter(r => !['Character', 'Scene', 'Item', 'Style'].includes(r.category));
+
+        // Build reference context based on categories
+        let referenceContext = '';
+
+        if (characterRefs.length > 0) {
+            referenceContext += `\n\nCHARACTER REFERENCES (create detailed "Character DNA" for each - MUST be consistent across all scenes):\n`;
+            referenceContext += characterRefs.map((c, i) => `${i + 1}. ${c.name}: Use the provided reference image as the ABSOLUTE TRUTH for this character's appearance.`).join('\n');
+        }
+
+        if (sceneRefs.length > 0) {
+            referenceContext += `\n\nSCENE/ENVIRONMENT REFERENCES (use these as visual inspiration for environments):\n`;
+            referenceContext += sceneRefs.map((s, i) => `${i + 1}. ${s.name}: Incorporate this environment/setting style into relevant scenes.`).join('\n');
+        }
+
+        if (itemRefs.length > 0) {
+            referenceContext += `\n\nPROP/ITEM REFERENCES (include these objects in scenes where appropriate):\n`;
+            referenceContext += itemRefs.map((item, i) => `${i + 1}. ${item.name}: Feature this item/prop in the storyboard where it fits the narrative.`).join('\n');
+        }
+
+        if (styleRefs.length > 0) {
+            referenceContext += `\n\nVISUAL STYLE REFERENCES (match this art style across ALL panels):\n`;
+            referenceContext += styleRefs.map((s, i) => `${i + 1}. ${s.name}: Use this as the visual style guide for the entire storyboard.`).join('\n');
+        }
+
+        if (otherRefs.length > 0) {
+            referenceContext += `\n\nADDITIONAL REFERENCES:\n`;
+            referenceContext += otherRefs.map((r, i) => `${i + 1}. ${r.name}: Incorporate elements from this reference where appropriate.`).join('\n');
+        }
+
+        // Also support legacy characterDescriptions format
+        const characterContext = characterDescriptions && characterDescriptions.length > 0 && !referenceContext
             ? `\n\nCHARACTERS (create a detailed "Character DNA" for each - this MUST be repeated verbatim in every scene):\n${characterDescriptions.map((c, i) => `${i + 1}. ${c.name}: ${c.description || 'Create a detailed physical description including age, ethnicity, hair style/color, distinctive features, and exact clothing'}`).join('\n')}`
             : '';
 
@@ -97,7 +133,7 @@ REQUIREMENTS:
 
 4. **Lighting Consistency**: Maintain logical lighting throughout (time of day, indoor/outdoor)
 
-${characterContext}
+${referenceContext || characterContext}
 
 STORY SYNOPSIS:
 ${story}
@@ -118,6 +154,8 @@ Each scene must have:
 - "lighting": Description of lighting
 - "mood": Emotional tone
 
+IMPORTANT: When referring to the specific characters listed above, YOU MUST use the format @CharacterName (e.g., if the character is "Shawn", write "@Shawn"). This triggers the asset link in the UI.
+
 Example format:
 {
   "styleAnchor": "photorealistic, cinematic, 35mm film, shallow depth of field",
@@ -127,7 +165,7 @@ Example format:
   "scenes": [
     {
       "sceneNumber": 1,
-      "description": "Shawn stands in the doorway of an abandoned warehouse...",
+      "description": "@Shawn stands in the doorway of an abandoned warehouse...",
       "cameraAngle": "Wide shot",
       "cameraMovement": "Static",
       "lighting": "Dusty beams of afternoon sunlight streaming through broken windows",
@@ -141,7 +179,54 @@ Respond ONLY with valid JSON, no other text.`;
         // Process images for multimodal prompt
         const promptParts = [systemPrompt];
 
-        if (characterImages && Object.keys(characterImages).length > 0) {
+        // Process reference images for multimodal prompt (new format with categories)
+        if (referenceImages && referenceImages.length > 0) {
+            console.log('[Storyboard] Processing reference images for scripts...');
+            for (const ref of referenceImages) {
+                try {
+                    const fullDataUrl = await resolveImageToBase64(ref.url);
+                    if (fullDataUrl && fullDataUrl.startsWith('data:')) {
+                        const matches = fullDataUrl.match(/^data:(.+);base64,(.+)$/);
+                        if (matches) {
+                            const mimeType = matches[1];
+                            const rawBase64 = matches[2];
+
+                            // Category-specific labels
+                            let imageLabel;
+                            switch (ref.category) {
+                                case 'Character':
+                                    imageLabel = `REFERENCE IMAGE FOR CHARACTER: ${ref.name}\n(This image is the visual truth for ${ref.name}. Ignore any conflicting text description. Ensure the script matches this character's gender, clothing, and appearance.)`;
+                                    break;
+                                case 'Scene':
+                                    imageLabel = `REFERENCE IMAGE FOR SCENE/ENVIRONMENT: ${ref.name}\n(Use this as visual inspiration for environment, setting, and atmosphere in relevant scenes.)`;
+                                    break;
+                                case 'Item':
+                                    imageLabel = `REFERENCE IMAGE FOR PROP/ITEM: ${ref.name}\n(Feature this item/object in scenes where appropriate to the narrative.)`;
+                                    break;
+                                case 'Style':
+                                    imageLabel = `VISUAL STYLE REFERENCE: ${ref.name}\n(Use this image as the art style guide for ALL panels. Match the color palette, rendering technique, and visual aesthetic.)`;
+                                    break;
+                                default:
+                                    imageLabel = `REFERENCE IMAGE: ${ref.name}\n(Incorporate elements from this reference where appropriate.)`;
+                            }
+
+                            promptParts.push(imageLabel);
+                            promptParts.push({
+                                inlineData: {
+                                    data: rawBase64,
+                                    mimeType: mimeType
+                                }
+                            });
+                            console.log(`[Storyboard] Added ref image for scripts: ${ref.name} (${ref.category}, ${mimeType})`);
+                        }
+                    }
+                } catch (e) {
+                    console.error(`[Storyboard] Failed to process image for ${ref.name}:`, e.message);
+                }
+            }
+        }
+        // Fallback: support legacy characterImages format for backwards compatibility
+        else if (characterImages && Object.keys(characterImages).length > 0) {
             console.log('[Storyboard] Processing character images for scripts...');
             for (const [name, url] of Object.entries(characterImages)) {
                 try {
@@ -230,8 +315,9 @@ Respond ONLY with valid JSON, no other text.`;
  */
 router.post('/brainstorm-story', async (req, res) => {
     try {
-        const { characterDescriptions, genre } = req.body;
+        const { characterDescriptions, genre, referenceImages, characterImages } = req.body;
         const { GEMINI_API_KEY } = req.app.locals;
+        const { resolveImageToBase64 } = await import('../utils/imageHelpers.js');
 
         if (!GEMINI_API_KEY) {
             return res.status(500).json({
@@ -253,7 +339,7 @@ router.post('/brainstorm-story', async (req, res) => {
         const genreHint = genre ? `\nGenre preference: ${genre}` : '';
 
         const systemPrompt = `You are a creative storyteller specializing in visual narratives perfect for storyboards.
-
+        
 ${characterContext}${genreHint}
 
 Create a compelling, concise story synopsis (3-5 sentences) that would make for an exciting visual storyboard.
@@ -262,11 +348,60 @@ The story should:
 - Include vivid visual moments that would look great as images
 - Feature the characters in interesting situations
 - Be suitable for AI image generation
+- INCORPORATE VISUAL DETAILS from the provided reference images where applicable.
+
+IMPORTANT: When referring to the specific characters listed above, YOU MUST use the format @CharacterName (e.g., if the character is "Shawn", write "@Shawn"). This triggers the asset link in the UI.
 
 Respond with ONLY the story synopsis, no additional text or formatting.`;
 
+        // Process reference images for multimodal prompt
+        const promptParts = [systemPrompt];
+
+        if (referenceImages && referenceImages.length > 0) {
+            console.log('[Storyboard] Processing reference images for brainstorming...');
+            for (const ref of referenceImages) {
+                try {
+                    const fullDataUrl = await resolveImageToBase64(ref.url);
+                    if (fullDataUrl && fullDataUrl.startsWith('data:')) {
+                        const matches = fullDataUrl.match(/^data:(.+);base64,(.+)$/);
+                        if (matches) {
+                            promptParts.push(`REFERENCE IMAGE: ${ref.name} (${ref.category}) - Use visuals from this image for inspiration.`);
+                            promptParts.push({
+                                inlineData: {
+                                    data: matches[2],
+                                    mimeType: matches[1]
+                                }
+                            });
+                        }
+                    }
+                } catch (e) {
+                    console.error(`[Storyboard] Failed to process image for ${ref.name}:`, e.message);
+                }
+            }
+        }
+        // Fallback for legacy
+        else if (characterImages && Object.keys(characterImages).length > 0) {
+            for (const [name, url] of Object.entries(characterImages)) {
+                try {
+                    const fullDataUrl = await resolveImageToBase64(url);
+                    if (fullDataUrl && fullDataUrl.startsWith('data:')) {
+                        const matches = fullDataUrl.match(/^data:(.+);base64,(.+)$/);
+                        if (matches) {
+                            promptParts.push(`REFERENCE IMAGE: ${name}`);
+                            promptParts.push({
+                                inlineData: {
+                                    data: matches[2],
+                                    mimeType: matches[1]
+                                }
+                            });
+                        }
+                    }
+                } catch (e) { console.error(e); }
+            }
+        }
+
         // Call Gemini with RETRY
-        const result = await retryOperation(() => model.generateContent(systemPrompt));
+        const result = await retryOperation(() => model.generateContent(promptParts));
         const story = result.response.text().trim();
 
         console.log(`[Storyboard] Generated story: ${story.substring(0, 100)}...`);
@@ -292,7 +427,7 @@ Respond with ONLY the story synopsis, no additional text or formatting.`;
  */
 router.post('/optimize-story', async (req, res) => {
     try {
-        const { story } = req.body;
+        const { story, characterNames } = req.body;
         const { GEMINI_API_KEY } = req.app.locals;
 
         if (!GEMINI_API_KEY) {
@@ -326,6 +461,7 @@ INSTRUCTIONS:
 3. Make the language concise, punchy, and cinematic.
 4. Ensure clarity of action for each potential scene.
 5. Do NOT make it too long (keep it under 150 words).
+6. IMPORTANT: Ensure that any mentions of the following characters use the @Name syntax: ${characterNames && characterNames.length > 0 ? characterNames.join(', ') : 'None'}. For example, use "@Shawn" instead of "Shawn". This is critical.
 
 Respond with ONLY the optimized story text.`;
 
@@ -355,7 +491,7 @@ Respond with ONLY the optimized story text.`;
  */
 router.post('/generate-composite', async (req, res) => {
     try {
-        const { scripts, styleAnchor, characterDNA, sceneCount, characterImages } = req.body;
+        const { scripts, styleAnchor, characterDNA, sceneCount, referenceImages, characterImages } = req.body;
         const { GEMINI_API_KEY } = req.app.locals;
         const { resolveImageToBase64 } = await import('../utils/imageHelpers.js');
 
@@ -377,7 +513,7 @@ router.post('/generate-composite', async (req, res) => {
         // Log deep debug info
         console.log(`[Storyboard] Style Anchor: ${styleAnchor?.substring(0, 50)}...`);
         console.log(`[Storyboard] Character DNA Keys: ${characterDNA ? Object.keys(characterDNA).join(', ') : 'None'}`);
-        console.log(`[Storyboard] Reference Images Keys: ${characterImages ? Object.keys(characterImages).join(', ') : 'None'}`);
+        console.log(`[Storyboard] Reference Images: ${referenceImages ? referenceImages.map(r => `${r.name}(${r.category})`).join(', ') : 'None'}`);
 
         // Determine grid layout based on scene count
         let layout;
@@ -393,11 +529,79 @@ router.post('/generate-composite', async (req, res) => {
         // Prepare multimodal prompt parts
         const promptParts = [];
         let hasReferenceImages = false;
+        let hasStyleReference = false;
         const scriptNamesWithImages = new Set();
 
-        // Add character reference images if available
-        if (characterImages && Object.keys(characterImages).length > 0) {
-            console.log('[Storyboard] Processing character reference images...');
+        // Process reference images with categories (new format)
+        if (referenceImages && referenceImages.length > 0) {
+            console.log('[Storyboard] Processing categorized reference images...');
+            for (const ref of referenceImages) {
+                if (!ref.url) continue;
+
+                try {
+                    console.log(`[Storyboard] Resolving image for: ${ref.name} (${ref.category})`);
+                    const base64Data = resolveImageToBase64(ref.url);
+                    if (base64Data) {
+                        const matches = base64Data.match(/^data:([^;]+);base64,(.+)$/);
+                        if (matches) {
+                            const mimeType = matches[1];
+                            const dataLength = matches[2].length;
+                            console.log(`[Storyboard] Resolved ${ref.name}: ${mimeType}, Size: ${(dataLength / 1024 / 1024).toFixed(2)} MB`);
+
+                            // Category-specific handling
+                            let imageLabel;
+                            switch (ref.category) {
+                                case 'Character':
+                                    // Try to find matching script name from DNA keys
+                                    let linkedScriptName = ref.name;
+                                    if (characterDNA) {
+                                        const normName = normalize(ref.name);
+                                        const match = Object.keys(characterDNA).find(k => normalize(k) === normName);
+                                        if (match) linkedScriptName = match;
+                                        else {
+                                            const partialMatch = Object.keys(characterDNA).find(k => normalize(k).includes(normName) || normName.includes(normalize(k)));
+                                            if (partialMatch) linkedScriptName = partialMatch;
+                                        }
+                                    }
+                                    scriptNamesWithImages.add(linkedScriptName);
+                                    imageLabel = `REFERENCE IMAGE for character "${ref.name}". In the scripts, this character is referred to as "@${ref.name}" or "${ref.name}". (This image is the ABSOLUTE TRUTH for their appearance).`;
+                                    break;
+                                case 'Scene':
+                                    imageLabel = `SCENE/ENVIRONMENT REFERENCE "${ref.name}" (@${ref.name}) - use this for environment, setting, and atmosphere inspiration:`;
+                                    break;
+                                case 'Item':
+                                    imageLabel = `PROP/ITEM REFERENCE "${ref.name}" (@${ref.name}) - feature this item in scenes where narrative-appropriate:`;
+                                    break;
+                                case 'Style':
+                                    // ... existing style logic ...
+                                    imageLabel = `VISUAL STYLE REFERENCE "${ref.name}" - match this art style, color palette, and rendering technique across ALL panels:`;
+                                    hasStyleReference = true;
+                                    break;
+                                default:
+                                    imageLabel = `REFERENCE IMAGE "${ref.name}" (@${ref.name}):`;
+                            }
+
+                            promptParts.push({ text: imageLabel });
+                            promptParts.push({
+                                inlineData: {
+                                    mimeType: mimeType,
+                                    data: matches[2]
+                                }
+                            });
+                            hasReferenceImages = true;
+                            console.log(`[Storyboard] Added reference image for ${ref.name} (${ref.category})`);
+                        }
+                    } else {
+                        console.warn(`[Storyboard] Failed to resolve base64 for ${ref.url}`);
+                    }
+                } catch (err) {
+                    console.warn(`[Storyboard] Failed to resolve image for ${ref.name}:`, err.message);
+                }
+            }
+        }
+        // Fallback: support legacy characterImages format for backwards compatibility
+        else if (characterImages && Object.keys(characterImages).length > 0) {
+            console.log('[Storyboard] Processing character reference images (legacy format)...');
             for (const [name, url] of Object.entries(characterImages)) {
                 if (!url) continue;
 
@@ -515,7 +719,7 @@ ${hasReferenceImages ? 'IMPORTANT: USE THE PROVIDED REFERENCE IMAGES as the ABSO
         
 ${characterDNAContext}
         
-PANEL INSTRUCTIONS:
+PANEL INSTRUCTIONS (Note: "@Name" refers to the specific reference image for that character/item):
 ${panelDescriptions}
         
 CRITICAL: 

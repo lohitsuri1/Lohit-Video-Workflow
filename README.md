@@ -19,6 +19,8 @@ A modern, AI-powered canvas application for generating and manipulating images a
 - **🎨 Visual Canvas Interface** - Drag-and-drop node-based workflow
 - **🤖 Multi-Model AI Generation** - GPT Image 1.5, Gemini Pro, Kling V1-V2.5 for images
 - **🎬 Multi-Model Video Generation** - Veo 3.1, Kling V1-V2.6, Hailuo 2.3/O2 for videos
+- **🎥 Camera Angle Control** - Transform any image by adjusting camera rotation and tilt angles (Qwen-Image-Edit)
+- **📋 Storyboard** - Create video storyboards with consistent characters and layouts
 - **💃 Motion Control** - Transfer motion from reference videos to character images (Kling V2.6 via Fal.ai)
 - **📥 TikTok Import** - Download TikTok videos without watermark for use as motion references
 - **📤 Post to X** - Share generated images/videos directly to Twitter/X with one click
@@ -60,7 +62,10 @@ Transform any image by adjusting camera rotation and tilt angles.
 
 https://github.com/user-attachments/assets/f0d678df-31ac-4431-bd7c-eea3950bfb1d
 
-This is not the perfect one, but it is a good start. Give me a try, and let me know how I can improve it. Thank you!
+### Storyboard
+Create video storyboards with consistent characters and layouts.
+
+https://github.com/user-attachments/assets/3c36de54-d37e-4875-8403-5b6e4a6216e0
 
 
 ## 🚀 Getting Started

@@ -17,6 +17,7 @@ export interface CharacterAsset {
     name: string;
     url: string;
     description?: string;
+    category?: string; // 'Character' | 'Scene' | 'Item' | 'Style' | 'Others'
 }
 
 export interface SceneScript {
@@ -195,13 +196,16 @@ export const useStoryboardGenerator = ({ onCreateNodes, viewport }: UseStoryboar
                     story: state.story,
                     characterDescriptions: state.selectedCharacters.map(c => ({
                         name: c.name,
-                        description: c.description || 'A character'
+                        description: c.description || 'A reference',
+                        category: c.category || 'Others'
                     })),
                     sceneCount: state.sceneCount,
-                    characterImages: state.selectedCharacters.reduce((acc, char) => ({
-                        ...acc,
-                        [char.name]: char.url
-                    }), {}) // Pass images for visual context
+                    // Pass reference images with their categories
+                    referenceImages: state.selectedCharacters.map(char => ({
+                        name: char.name,
+                        url: char.url,
+                        category: char.category || 'Others'
+                    }))
                 })
             });
 
@@ -240,6 +244,12 @@ export const useStoryboardGenerator = ({ onCreateNodes, viewport }: UseStoryboar
                     characterDescriptions: state.selectedCharacters.map(c => ({
                         name: c.name,
                         description: c.description || 'A character'
+                    })),
+                    // Pass reference images for multimodal brainstorming
+                    referenceImages: state.selectedCharacters.map(char => ({
+                        name: char.name,
+                        url: char.url,
+                        category: char.category || 'Others'
                     }))
                 })
             });
@@ -277,7 +287,10 @@ export const useStoryboardGenerator = ({ onCreateNodes, viewport }: UseStoryboar
             const response = await fetch('/api/storyboard/optimize-story', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ story: state.story })
+                body: JSON.stringify({
+                    story: state.story,
+                    characterNames: state.selectedCharacters.map(c => c.name)
+                })
             });
 
             if (!response.ok) {
@@ -314,10 +327,12 @@ export const useStoryboardGenerator = ({ onCreateNodes, viewport }: UseStoryboar
                     styleAnchor: state.styleAnchor,
                     characterDNA: state.characterDNA,
                     sceneCount: state.scripts.length,
-                    characterImages: state.selectedCharacters.reduce((acc, char) => ({
-                        ...acc,
-                        [char.name]: char.url
-                    }), {})
+                    // Pass reference images with their categories
+                    referenceImages: state.selectedCharacters.map(char => ({
+                        name: char.name,
+                        url: char.url,
+                        category: char.category || 'Others'
+                    }))
                 })
             });
 

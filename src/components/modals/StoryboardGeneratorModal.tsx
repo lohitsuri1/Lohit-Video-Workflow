@@ -5,9 +5,10 @@
  * Multi-step workflow: Character Selection → Story Input → Script Review → Generate
  */
 
-import React, { useState, useEffect } from 'react';
-import { X, ChevronRight, ChevronLeft, Loader2, Film, Users, PenTool, Sparkles, Check, Edit3, Wand2, Eye } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { X, ChevronRight, ChevronLeft, Loader2, Film, Users, PenTool, Sparkles, Check, Edit3, Wand2, Eye, ChevronDown } from 'lucide-react';
 import { CharacterAsset, SceneScript, StoryboardState } from '../../hooks/useStoryboardGenerator';
+import { StoryInput } from '../StoryInput';
 
 // ============================================================================
 // IMAGE MODELS (Copied from NodeControls.tsx for model selection)
@@ -61,9 +62,18 @@ export const StoryboardGeneratorModal: React.FC<StoryboardGeneratorModalProps> =
     onRegenerateComposite,
     onCreateNodes
 }) => {
-    const [characterAssets, setCharacterAssets] = useState<CharacterAsset[]>([]);
+    const [characterAssets, setCharacterAssets] = useState<(CharacterAsset & { category: string })[]>([]);
     const [isLoadingAssets, setIsLoadingAssets] = useState(false);
     const [editingScriptIndex, setEditingScriptIndex] = useState<number | null>(null);
+    const [selectedCategory, setSelectedCategory] = useState<string>('All');
+    const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
+
+    // Mention picker state
+    const [showMentionPicker, setShowMentionPicker] = useState(false);
+    const [mentionFilter, setMentionFilter] = useState('');
+    const [mentionIndex, setMentionIndex] = useState(0);
+    const [mentionStartPos, setMentionStartPos] = useState(0);
+    const textareaRef = useRef<HTMLDivElement>(null);
 
 
     // Step definitions for progress bar
@@ -96,16 +106,18 @@ export const StoryboardGeneratorModal: React.FC<StoryboardGeneratorModalProps> =
                 const response = await fetch('/api/library');
                 if (response.ok) {
                     const assets = await response.json();
-                    // Filter to only Character category
-                    const characters = assets
-                        .filter((a: any) => a.category === 'Character')
+                    // Filter to show all image assets and include category info
+                    const imageAssets = assets
+                        .filter((a: any) => a.type === 'image')
                         .map((a: any) => ({
                             id: a.id,
                             name: a.name,
                             url: a.url,
-                            description: a.description || ''
+                            description: a.description || '',
+                            category: a.category || 'Others'
                         }));
-                    setCharacterAssets(characters);
+                    setCharacterAssets(imageAssets);
+                    setSelectedCategory('All');
                 }
             } catch (error) {
                 console.error('[StoryboardModal] Failed to fetch assets:', error);
@@ -116,6 +128,111 @@ export const StoryboardGeneratorModal: React.FC<StoryboardGeneratorModalProps> =
 
         fetchAssets();
     }, [isOpen]);
+
+    // Get unique categories from loaded assets (exclude Sound Effect)
+    const availableCategories = useMemo(() => {
+        const categories = new Set(characterAssets.map(a => a.category));
+        categories.delete('Sound Effect'); // Audio files can't be used as image references
+        return ['All', ...Array.from(categories).sort()];
+    }, [characterAssets]);
+
+    // Filter assets by selected category
+    const filteredAssets = useMemo(() => {
+        if (selectedCategory === 'All') return characterAssets;
+        return characterAssets.filter(a => a.category === selectedCategory);
+    }, [characterAssets, selectedCategory]);
+
+    // Filter mention suggestions based on current filter text
+    const mentionSuggestions = useMemo(() => {
+        if (!showMentionPicker || state.selectedCharacters.length === 0) return [];
+        const filter = mentionFilter.toLowerCase();
+        return state.selectedCharacters.filter(c =>
+            c.name.toLowerCase().includes(filter)
+        );
+    }, [showMentionPicker, mentionFilter, state.selectedCharacters]);
+
+    // Handle story change with mention detection
+    const handleStoryChange = useCallback((value: string) => {
+        // Calculate cursor position for mention detection
+        let cursorPos = value.length;
+        if (textareaRef.current) {
+            const sel = window.getSelection();
+            if (sel && sel.rangeCount > 0 && textareaRef.current.contains(sel.anchorNode)) {
+                try {
+                    const range = sel.getRangeAt(0);
+                    const preCaretRange = range.cloneRange();
+                    preCaretRange.selectNodeContents(textareaRef.current);
+                    preCaretRange.setEnd(range.endContainer, range.endOffset);
+                    cursorPos = preCaretRange.toString().length;
+                } catch (e) {
+                    console.warn('Failed to calculate cursor position', e);
+                }
+            }
+        }
+
+        const textBeforeCursor = value.substring(0, cursorPos);
+        const atIndex = textBeforeCursor.lastIndexOf('@');
+
+        if (atIndex !== -1) {
+            // Check if @ is at start or preceded by space/newline
+            const charBefore = textBeforeCursor[atIndex - 1];
+            if (atIndex === 0 || charBefore === ' ' || charBefore === '\n') {
+                const filterText = textBeforeCursor.substring(atIndex + 1);
+                // Only show if no space after @ (user is still typing the mention)
+                if (!filterText.includes(' ')) {
+                    setShowMentionPicker(true);
+                    setMentionFilter(filterText);
+                    setMentionStartPos(atIndex);
+                    setMentionIndex(0);
+                } else {
+                    setShowMentionPicker(false);
+                }
+            } else {
+                setShowMentionPicker(false);
+            }
+        } else {
+            setShowMentionPicker(false);
+        }
+
+        onSetStory(value);
+    }, [onSetStory]);
+
+    // Insert a mention at the current position
+    const insertMention = useCallback((asset: CharacterAsset) => {
+        const value = state.story;
+        const beforeMention = value.substring(0, mentionStartPos);
+        const afterMention = value.substring(mentionStartPos + mentionFilter.length + 1); // +1 for @
+        const newValue = beforeMention + '@' + asset.name + ' ' + afterMention;
+        onSetStory(newValue);
+        setShowMentionPicker(false);
+        setMentionFilter('');
+
+        // Focus input after mention
+        setTimeout(() => {
+            if (textareaRef.current) {
+                textareaRef.current.focus();
+                // Move cursor to end logic handled by StoryInput fallback or browser default
+            }
+        }, 0);
+    }, [state.story, mentionStartPos, mentionFilter, onSetStory]);
+
+    // Handle keyboard navigation for mention picker
+    const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+        if (!showMentionPicker || mentionSuggestions.length === 0) return;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setMentionIndex(prev => (prev + 1) % mentionSuggestions.length);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setMentionIndex(prev => (prev - 1 + mentionSuggestions.length) % mentionSuggestions.length);
+        } else if (e.key === 'Enter' || e.key === 'Tab') {
+            e.preventDefault();
+            insertMention(mentionSuggestions[mentionIndex]);
+        } else if (e.key === 'Escape') {
+            setShowMentionPicker(false);
+        }
+    }, [showMentionPicker, mentionSuggestions, mentionIndex, insertMention]);
 
     if (!isOpen) return null;
 
@@ -207,6 +324,60 @@ export const StoryboardGeneratorModal: React.FC<StoryboardGeneratorModalProps> =
                     </div>
                 </div>
 
+                {/* Characters Step Header - Fixed outside scroll area */}
+                {state.step === 'characters' && (
+                    <div className="px-6 pt-6 pb-4 border-b border-neutral-800/30">
+                        <h3 className="text-white font-medium mb-2">Select Reference Images</h3>
+                        <p className="text-neutral-400 text-sm mb-4">
+                            Choose up to 3 reference images from your Asset Library to guide the AI.
+                        </p>
+
+                        {/* Category Dropdown */}
+                        {characterAssets.length > 0 && (
+                            <div className="relative">
+                                <button
+                                    onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
+                                    className="w-full flex items-center justify-between px-4 py-2.5 bg-neutral-900 border border-neutral-700 rounded-xl text-sm text-white hover:border-neutral-600 transition-colors"
+                                >
+                                    <span className="flex items-center gap-2">
+                                        <span className="text-neutral-400">Category:</span>
+                                        <span className="font-medium">{selectedCategory}</span>
+                                        <span className="text-neutral-500 text-xs">({filteredAssets.length} items)</span>
+                                    </span>
+                                    <ChevronDown size={16} className={`text-neutral-400 transition-transform duration-200 ${isCategoryDropdownOpen ? 'rotate-180' : ''}`} />
+                                </button>
+
+                                {isCategoryDropdownOpen && (
+                                    <div className="absolute z-20 w-full mt-1 bg-neutral-900 border border-neutral-700 rounded-xl shadow-xl overflow-hidden">
+                                        {availableCategories.map(category => (
+                                            <button
+                                                key={category}
+                                                onClick={() => {
+                                                    setSelectedCategory(category);
+                                                    setIsCategoryDropdownOpen(false);
+                                                }}
+                                                className={`w-full px-4 py-2.5 text-left text-sm transition-colors ${selectedCategory === category
+                                                    ? 'bg-violet-600 text-white'
+                                                    : 'text-neutral-300 hover:bg-neutral-800'
+                                                    }`}
+                                            >
+                                                <span className="flex items-center justify-between">
+                                                    <span>{category}</span>
+                                                    <span className="text-xs opacity-60">
+                                                        {category === 'All'
+                                                            ? characterAssets.length
+                                                            : characterAssets.filter(a => a.category === category).length}
+                                                    </span>
+                                                </span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto p-6">
                     {/* Error Message */}
@@ -216,14 +387,10 @@ export const StoryboardGeneratorModal: React.FC<StoryboardGeneratorModalProps> =
                         </div>
                     )}
 
-                    {/* Step 1: Character Selection */}
+                    {/* Step 1: Character Selection - Grid Only */}
                     {state.step === 'characters' && (
-                        <div>
-                            <h3 className="text-white font-medium mb-2">Select Characters</h3>
-                            <p className="text-neutral-400 text-sm mb-4">
-                                Choose up to 3 characters from your Asset Library. Characters with "Character" category will appear here.
-                            </p>
 
+                        <div>
                             {isLoadingAssets ? (
                                 <div className="flex items-center justify-center py-12">
                                     <Loader2 className="w-6 h-6 text-purple-400 animate-spin" />
@@ -231,12 +398,18 @@ export const StoryboardGeneratorModal: React.FC<StoryboardGeneratorModalProps> =
                             ) : characterAssets.length === 0 ? (
                                 <div className="text-center py-12 text-neutral-500">
                                     <Users size={48} className="mx-auto mb-3 opacity-50" />
-                                    <p>No characters found in Asset Library</p>
-                                    <p className="text-xs mt-1">Add assets with category "Character" to use them here</p>
+                                    <p>No images found in Asset Library</p>
+                                    <p className="text-xs mt-1">Add image assets to your library to use them as character references</p>
+                                </div>
+                            ) : filteredAssets.length === 0 ? (
+                                <div className="text-center py-12 text-neutral-500">
+                                    <Users size={48} className="mx-auto mb-3 opacity-50" />
+                                    <p>No images in "{selectedCategory}" category</p>
+                                    <p className="text-xs mt-1">Try selecting a different category</p>
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-3 gap-4">
-                                    {characterAssets.map(character => {
+                                    {filteredAssets.map(character => {
                                         const isSelected = state.selectedCharacters.some(c => c.id === character.id);
                                         return (
                                             <button
@@ -280,10 +453,6 @@ export const StoryboardGeneratorModal: React.FC<StoryboardGeneratorModalProps> =
                                     })}
                                 </div>
                             )}
-
-                            <p className="text-xs text-neutral-500 mt-4">
-                                Selected: {state.selectedCharacters.length}/3 characters (optional)
-                            </p>
                         </div>
                     )}
 
@@ -294,6 +463,39 @@ export const StoryboardGeneratorModal: React.FC<StoryboardGeneratorModalProps> =
                             <p className="text-neutral-400 text-sm mb-4">
                                 Describe the story you want to visualize. AI will break it into {state.sceneCount} scenes.
                             </p>
+
+                            {/* Selected Reference Images - clickable to insert @ mention */}
+                            {state.selectedCharacters.length > 0 && (
+                                <div className="mb-4 p-3 bg-neutral-900/50 rounded-xl border border-neutral-800">
+                                    <p className="text-xs text-neutral-400 mb-2">
+                                        Selected references — click to insert @mention in story:
+                                    </p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {state.selectedCharacters.map(asset => (
+                                            <button
+                                                key={asset.id}
+                                                onClick={() => {
+                                                    const mention = `@${asset.name}`;
+                                                    onSetStory(state.story + (state.story.endsWith(' ') || state.story === '' ? '' : ' ') + mention + ' ');
+                                                }}
+                                                className="flex items-center gap-2 px-2 py-1.5 bg-neutral-800 hover:bg-neutral-700 rounded-lg transition-colors group"
+                                            >
+                                                <img
+                                                    src={asset.url}
+                                                    alt={asset.name}
+                                                    className="w-6 h-6 rounded object-cover"
+                                                />
+                                                <span className="text-xs text-neutral-300 group-hover:text-white">
+                                                    @{asset.name}
+                                                </span>
+                                                <span className="text-[10px] text-neutral-500 px-1.5 py-0.5 bg-neutral-900 rounded">
+                                                    {asset.category || 'Others'}
+                                                </span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Scene Count Slider */}
                             <div className="mb-4">
@@ -334,13 +536,56 @@ export const StoryboardGeneratorModal: React.FC<StoryboardGeneratorModalProps> =
                                 )}
                             </button>
 
-                            {/* Story Textarea */}
-                            <textarea
-                                value={state.story}
-                                onChange={(e) => onSetStory(e.target.value)}
-                                placeholder="Once upon a time, in a magical forest..."
-                                className="w-full h-48 bg-neutral-900 border border-neutral-700 rounded-xl p-4 text-white text-sm resize-none focus:outline-none focus:border-purple-500 placeholder-neutral-500"
-                            />
+                            {/* Story Textarea with Mention Picker */}
+                            <div className="relative">
+                                <StoryInput
+                                    inputRef={textareaRef}
+                                    value={state.story}
+                                    onChange={handleStoryChange}
+                                    onKeyDown={handleKeyDown}
+                                    onBlur={() => {
+                                        // Delay closing to allow click on mention
+                                        setTimeout(() => setShowMentionPicker(false), 150);
+                                    }}
+                                    placeholder={state.selectedCharacters.length > 0
+                                        ? `Type @ to mention assets like @${state.selectedCharacters[0]?.name}...`
+                                        : "Once upon a time, in a magical forest..."}
+                                    assets={state.selectedCharacters}
+                                    className="min-h-[12rem]"
+                                />
+
+                                {/* Mention Picker Dropdown */}
+                                {showMentionPicker && mentionSuggestions.length > 0 && (
+                                    <div className="absolute left-4 top-10 w-64 bg-neutral-900 border border-neutral-700 rounded-lg shadow-2xl overflow-hidden z-50">
+                                        <div className="text-[10px] text-neutral-500 px-3 py-1 border-b border-neutral-700/50 bg-neutral-900">
+                                            Select reference (↑↓ to navigate, Enter to select)
+                                        </div>
+                                        <div className="max-h-48 overflow-y-auto">
+                                            {mentionSuggestions.map((asset, index) => (
+                                                <button
+                                                    key={asset.id}
+                                                    onClick={() => insertMention(asset)}
+                                                    onMouseEnter={() => setMentionIndex(index)}
+                                                    className={`w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors ${index === mentionIndex
+                                                        ? 'bg-purple-600 text-white'
+                                                        : 'hover:bg-neutral-800 text-neutral-300'
+                                                        }`}
+                                                >
+                                                    <img
+                                                        src={asset.url}
+                                                        alt={asset.name}
+                                                        className="w-7 h-7 rounded object-cover flex-shrink-0"
+                                                    />
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="text-sm font-medium truncate">@{asset.name}</div>
+                                                        <div className="text-[10px] text-neutral-400">{asset.category || 'Others'}</div>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                             <div className="flex justify-between items-start mt-2">
                                 <p className="text-xs text-neutral-500">
                                     Tip: Be descriptive about scenes, actions, and emotions for better results.
@@ -420,22 +665,28 @@ export const StoryboardGeneratorModal: React.FC<StoryboardGeneratorModalProps> =
                                             </div>
 
                                             {editingScriptIndex === index ? (
-                                                <textarea
+                                                <StoryInput
                                                     value={script.description}
-                                                    onChange={(e) => onUpdateScript(index, { description: e.target.value })}
+                                                    onChange={(val) => onUpdateScript(index, { description: val })}
                                                     onBlur={() => setEditingScriptIndex(null)}
-                                                    autoFocus
-                                                    className="w-full bg-neutral-800 border border-neutral-600 rounded-lg p-2 text-white text-sm resize-none focus:outline-none focus:border-purple-500"
-                                                    rows={3}
+                                                    assets={state.selectedCharacters}
+                                                    className="w-full bg-neutral-800 border border-neutral-600 rounded-lg p-2 min-h-[5rem]"
+                                                // autoFocus is trickier with contentEditable, handled by ref usually but let's test
                                                 />
                                             ) : (
-                                                <p
+                                                <div
                                                     onClick={() => setEditingScriptIndex(index)}
-                                                    className="text-neutral-300 text-sm cursor-pointer hover:bg-neutral-800 rounded-lg p-2 -m-2 transition-colors group"
+                                                    className="cursor-pointer hover:bg-neutral-800 rounded-lg -m-2 p-2 transition-colors group relative"
                                                 >
-                                                    {script.description}
-                                                    <Edit3 size={12} className="inline ml-2 opacity-0 group-hover:opacity-50" />
-                                                </p>
+                                                    <StoryInput
+                                                        value={script.description}
+                                                        onChange={() => { }}
+                                                        assets={state.selectedCharacters}
+                                                        readOnly
+                                                        className="bg-transparent border-none p-0 min-h-0 h-auto overflow-visible"
+                                                    />
+                                                    <Edit3 size={12} className="absolute top-2 right-2 text-neutral-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                </div>
                                             )}
                                         </div>
                                     )))}
@@ -539,6 +790,13 @@ export const StoryboardGeneratorModal: React.FC<StoryboardGeneratorModalProps> =
                         Back
                     </button>
 
+                    {/* Selected Characters Count - shown in footer for characters step */}
+                    {state.step === 'characters' && (
+                        <p className="text-xs text-neutral-500">
+                            Selected: {state.selectedCharacters.length}/3 images (optional)
+                        </p>
+                    )}
+
                     {/* Next/Generate Button */}
                     {state.step === 'characters' && (
                         <button
@@ -630,6 +888,6 @@ export const StoryboardGeneratorModal: React.FC<StoryboardGeneratorModalProps> =
                     )}
                 </div>
             </div>
-        </div>
+        </div >
     );
 };
