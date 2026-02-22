@@ -13,11 +13,17 @@ Downloaded files are placed in:
 Both sources are checked against expected magic bytes before saving to disk.
 HTTPS is enforced for all downloads.
 
+Pass --synthetic to skip all network downloads and generate placeholder assets
+locally using FFmpeg (useful in CI environments with restricted network access).
+
 Usage:
-    python download_assets.py
+    python download_assets.py              # download from the internet
+    python download_assets.py --synthetic  # generate locally with ffmpeg
 """
 
+import argparse
 import os
+import subprocess
 import sys
 import urllib.request
 import urllib.parse
@@ -210,9 +216,74 @@ def download_audio_fallback(dest: str) -> bool:
                 os.unlink(p)
         return False
 
+# ── Synthetic asset generation (ffmpeg, no network required) ──────────────────
+
+def _run_ffmpeg(args: list) -> None:
+    """Run ffmpeg with *args*.  Raises RuntimeError on non-zero exit."""
+    result = subprocess.run(
+        ["ffmpeg"] + args,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode != 0:
+        stderr_tail = result.stderr[-1000:].decode(errors="replace") if result.stderr is not None else ""
+        raise RuntimeError(f"ffmpeg failed (exit {result.returncode}): {stderr_tail}")
+
+
+def generate_synthetic_image(dest: str) -> None:
+    """
+    Generate a 1920×1080 saffron-coloured placeholder JPEG using FFmpeg.
+    No network access required.
+    """
+    print("🎨  Generating synthetic placeholder image with FFmpeg …")
+    _run_ffmpeg([
+        "-y", "-f", "lavfi",
+        "-i", "color=c=0xFF7B00:size=1920x1080:rate=1",
+        "-frames:v", "1",
+        "-update", "1",
+        dest,
+    ])
+    size_kb = os.path.getsize(dest) / 1024
+    print(f"   ✔  Saved: {dest} ({size_kb:.0f} KB)")
+
+
+def generate_synthetic_audio(dest: str, duration: int = 30) -> None:
+    """
+    Generate a *duration*-second 432 Hz harmonic ambient tone as MP3 using FFmpeg.
+    No network access required.
+    """
+    print(f"🎹  Generating synthetic {duration}s ambient audio with FFmpeg …")
+    # 432 Hz root + harmonic overtones (multiples/fractions of the base frequency)
+    overtones = "+".join([
+        "0.25*sin(2*PI*432*t)",
+        "0.15*sin(2*PI*540*t)",
+        "0.12*sin(2*PI*648*t)",
+        "0.08*sin(2*PI*864*t)",
+        "0.04*sin(2*PI*216*t)",
+    ])
+    _run_ffmpeg([
+        "-y", "-f", "lavfi",
+        "-i", f"aevalsrc={overtones}:s=44100:c=stereo",
+        "-t", str(duration),
+        "-c:a", "libmp3lame", "-b:a", "128k",
+        dest,
+    ])
+    size_kb = os.path.getsize(dest) / 1024
+    print(f"   ✔  Saved: {dest} ({size_kb:.0f} KB)")
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Download (or generate) assets for pipeline.py."
+    )
+    parser.add_argument(
+        "--synthetic", action="store_true",
+        help="Skip network downloads; generate placeholder assets locally with FFmpeg.",
+    )
+    args = parser.parse_args()
+
     os.makedirs(IMAGES_DIR, exist_ok=True)
     os.makedirs(MUSIC_DIR,  exist_ok=True)
 
@@ -220,14 +291,38 @@ def main() -> None:
     print("  Devotional Video Asset Downloader")
     print("=" * 55)
 
-    # ── Image ──────────────────────────────────────────────────
+    if args.synthetic:
+        # ── Synthetic mode: generate everything locally ──────────
+        print("ℹ️   Synthetic mode: generating assets with FFmpeg (no network).")
+        if os.path.isfile(IMAGE_PATH):
+            print(f"📷  Image already present: {IMAGE_PATH}")
+        else:
+            generate_synthetic_image(IMAGE_PATH)
+
+        if os.path.isfile(AUDIO_PATH):
+            print(f"🎵  Audio already present: {AUDIO_PATH}")
+        else:
+            generate_synthetic_audio(AUDIO_PATH)
+
+        print("\n✅  Synthetic assets ready. Run the pipeline with:")
+        print("      python pipeline.py")
+        return
+
+    # ── Network mode ──────────────────────────────────────────────
     if os.path.isfile(IMAGE_PATH):
         print(f"📷  Image already present: {IMAGE_PATH}")
     else:
         ok = download_image(IMAGE_PATH)
         if not ok:
+            print("   ↩  Falling back to synthetic image …")
+            try:
+                generate_synthetic_image(IMAGE_PATH)
+                ok = True
+            except Exception as exc:
+                print(f"   ⚠  Synthetic image generation failed: {exc}", file=sys.stderr)
+        if not ok:
             print(
-                "\n❌  Could not download image automatically.\n"
+                "\n❌  Could not obtain an image.\n"
                 "   Please place any JPG/PNG image at:\n"
                 f"     {IMAGE_PATH}\n"
                 "   Free sources:\n"
@@ -237,7 +332,6 @@ def main() -> None:
             )
             sys.exit(1)
 
-    # ── Audio ──────────────────────────────────────────────────
     if os.path.isfile(AUDIO_PATH):
         print(f"🎵  Audio already present: {AUDIO_PATH}")
     else:
@@ -245,8 +339,15 @@ def main() -> None:
         if not ok:
             ok = download_audio_fallback(AUDIO_PATH)
         if not ok:
+            print("   ↩  Falling back to synthetic audio …")
+            try:
+                generate_synthetic_audio(AUDIO_PATH)
+                ok = True
+            except Exception as exc:
+                print(f"   ⚠  Synthetic audio generation failed: {exc}", file=sys.stderr)
+        if not ok:
             print(
-                "\n❌  Could not download audio automatically.\n"
+                "\n❌  Could not obtain audio.\n"
                 "   Please place any MP3/WAV file at:\n"
                 f"     {AUDIO_PATH}\n"
                 "   Free sources:\n"

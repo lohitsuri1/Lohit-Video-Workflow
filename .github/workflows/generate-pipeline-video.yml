@@ -1,0 +1,62 @@
+name: Generate Devotional Video (Python Pipeline)
+
+# Generates a high-quality 1080p devotional video using the Python pipeline:
+#   1. download_assets.py – fetches a public-domain Radha-Krishna image
+#      (Wikimedia Commons) and devotional audio (Internet Archive).
+#      Falls back to ffmpeg-synthesized assets if network sources are unavailable.
+#   2. pipeline.py – combines image + audio into output/final_video.mp4
+#      (1920×1080, libx264 / AAC 192k, yuv420p).
+#
+# The finished video is uploaded as a GitHub Actions artifact and can be
+# downloaded from Actions → workflow run → Artifacts.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  generate-video:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Install Python dependencies
+        run: pip install requests tqdm
+
+      - name: Download assets (with ffmpeg fallback)
+        run: |
+          if ! python download_assets.py; then
+            echo "Network download failed – generating synthetic assets with FFmpeg"
+            python download_assets.py --synthetic
+          fi
+
+      - name: Generate video
+        run: python pipeline.py
+
+      - name: Show video metadata
+        run: |
+          echo "=== Output Video Info ==="
+          ffprobe -v quiet -show_streams -of default=noprint_wrappers=1 output/final_video.mp4 \
+            | grep -E "^(codec_name|width|height|duration|bit_rate|sample_rate)=" || \
+            ffmpeg -i output/final_video.mp4 2>&1 | grep -E "Duration|Stream"
+          ls -lh output/final_video.mp4
+
+      - name: Upload video artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-video
+          path: output/final_video.mp4
+          if-no-files-found: error
+          retention-days: 14
