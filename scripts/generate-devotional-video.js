@@ -2,16 +2,18 @@
  * generate-devotional-video.js
  *
  * Downloads royalty-free Radha-Krishna devotional images and audio from
- * multiple public sources, then stitches them into a 15-minute video.
+ * multiple public sources, then stitches them into a 15-minute meditation video.
  *
  * Image sources (tried in order):
- *   1. Wikimedia Commons  – public-domain paintings via the MediaWiki API
- *   2. Metropolitan Museum of Art Open API – public-domain Indian/Asian art
- *   3. ffmpeg colour placeholders          – local fallback, no network needed
+ *   1. Wikimedia Commons             – public-domain paintings via MediaWiki API
+ *   2. Metropolitan Museum of Art    – public-domain Indian/Asian art (Open Access API)
+ *   3. Cleveland Museum of Art       – public-domain Asian art (Open Access API)
+ *   4. ffmpeg colour placeholders    – local fallback, no network needed
  *
  * Audio sources (tried in order):
- *   1. Internet Archive (archive.org) – CC/public-domain devotional music
- *   2. ffmpeg 432 Hz harmonic synthesis – local fallback, no network needed
+ *   1. ccMixter                      – Creative Commons music (no API key)
+ *   2. Internet Archive (archive.org) – CC/public-domain devotional music (no API key)
+ *   3. ffmpeg 432 Hz harmonic synthesis – local fallback, no network needed
  *
  * Folder layout (created automatically):
  *   library/assets/devotion/radha-krishna/images/  – downloaded images
@@ -19,6 +21,11 @@
  *   library/videos/radha-krishna-15min.mp4          – final video
  *
  * No external API keys are required.
+ *
+ * Note on Kling AI: Kling AI is a video/image *generation* service (like Veo/Sora)
+ * that creates content from text prompts — it has no searchable public image library
+ * for download and requires paid API credits. It is not suitable as a royalty-free
+ * asset source for this pipeline.
  *
  * Usage:
  *   node scripts/generate-devotional-video.js
@@ -207,6 +214,47 @@ async function fetchMetMuseumImages(targetCount) {
     return downloaded;
 }
 
+/** Source C: Cleveland Museum of Art Open Access API – public-domain Asian/Indian art. */
+async function fetchClevelandMuseumImages(targetCount) {
+    console.log(`  🏺  Cleveland Museum of Art API (target: ${targetCount} images)…`);
+    const downloaded = [];
+
+    // Search for Indian/Hindu artworks (paintings only, must have an image)
+    const searchUrl =
+        'https://openaccess-api.clevelandart.org/api/artworks/?' +
+        `q=${encodeURIComponent('krishna OR radha OR vishnu OR shiva OR hindu')}&has_image=1` +
+        `&type=Painting&limit=${targetCount + 10}`;
+    try {
+        const res = await fetch(searchUrl, { signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS) });
+        const data = await res.json();
+        const artworks = data.data ?? [];
+        console.log(`    Found ${artworks.length} candidate artwork(s)`);
+
+        let idx = 1;
+        for (const art of artworks) {
+            if (downloaded.length >= targetCount) break;
+            try {
+                const imageUrl = art.images?.web?.url || art.images?.print?.url;
+                if (!imageUrl) continue;
+
+                const ext = path.extname(new URL(imageUrl).pathname).toLowerCase() || '.jpg';
+                const destPath = path.join(IMAGES_DIR, `cma-${String(idx).padStart(2, '0')}${ext}`);
+                const title = (art.title ?? 'Untitled').slice(0, 40);
+                console.log(`    ⬇  cma-${String(idx).padStart(2, '0')}${ext}  "${title}"`);
+                await downloadFile(imageUrl, destPath);
+                downloaded.push(destPath);
+                idx++;
+            } catch (err) {
+                console.warn(`    ⚠  CMA artwork ${art.id}: ${err.message}`);
+            }
+        }
+    } catch (err) {
+        console.warn(`    ⚠  Cleveland Museum search failed: ${err.message}`);
+    }
+    console.log(`    ✔  Cleveland Museum: ${downloaded.length} image(s)`);
+    return downloaded;
+}
+
 /**
  * Orchestrator: collect NUM_IMAGES images from all sources,
  * filling any gap with ffmpeg colour placeholders.
@@ -222,6 +270,12 @@ async function collectImages() {
     if (allImages.length < NUM_IMAGES) {
         const metImages = await fetchMetMuseumImages(NUM_IMAGES - allImages.length);
         allImages = [...allImages, ...metImages];
+    }
+
+    // Fill remaining slots from Cleveland Museum of Art
+    if (allImages.length < NUM_IMAGES) {
+        const cmaImages = await fetchClevelandMuseumImages(NUM_IMAGES - allImages.length);
+        allImages = [...allImages, ...cmaImages];
     }
 
     // Fill any remaining with ffmpeg colour placeholders
@@ -246,14 +300,63 @@ async function collectImages() {
 // ── Step 2: Obtain background music from royalty-free sources ─────────────────
 
 /**
- * Source A: Internet Archive – searches for CC/public-domain devotional music,
+ * Source A: ccMixter – Creative Commons licensed music (no API key required).
+ * Searches for ambient/meditation tracks, downloads and loops to VIDEO_DURATION_SECS.
+ * Returns true on success, false if all candidates failed.
+ */
+async function fetchCcMixterAudio(destPath) {
+    console.log('  🎼  ccMixter (Creative Commons ambient/meditation music)…');
+    const searchUrl = 'https://ccmixter.org/api/query?f=json&search=meditation+ambient+peaceful&limit=10';
+    let tracks = [];
+    try {
+        const res = await fetch(searchUrl, { signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS) });
+        tracks = await res.json();
+        console.log(`    Found ${tracks.length} candidate track(s)`);
+    } catch (err) {
+        console.warn(`    ⚠  ccMixter search failed: ${err.message}`);
+        return false;
+    }
+
+    const tmpAudio = path.join(MUSIC_DIR, '_ccmixter_tmp');
+
+    for (const track of tracks) {
+        // The API returns upload_file[] with a download_url per file
+        const fileUrl = (track.upload_file ?? [])
+            .find(f => /\.mp3$/i.test(f.file_name ?? ''))?.download_url;
+        if (!fileUrl) continue;
+        try {
+            const title = track.upload_name ?? track.upload_id ?? 'unknown';
+            const artist = track.user_name ?? 'unknown';
+            console.log(`    ⬇  "${title}" by ${artist}`);
+            await downloadFile(fileUrl, tmpAudio);
+
+            console.log(`    🔁  Looping to ${VIDEO_DURATION_SECS}s…`);
+            runFFmpeg([
+                '-y', '-stream_loop', '-1', '-i', tmpAudio,
+                '-t', String(VIDEO_DURATION_SECS),
+                '-c:a', 'aac', '-b:a', '128k',
+                destPath,
+            ]);
+            fs.unlinkSync(tmpAudio);
+            console.log('    ✔  ccMixter audio ready');
+            return true;
+        } catch (err) {
+            console.warn(`    ⚠  ${track.upload_id}: ${err.message}`);
+            if (fs.existsSync(tmpAudio)) fs.unlinkSync(tmpAudio);
+        }
+    }
+    return false;
+}
+
+/**
+ * Source B: Internet Archive – searches for CC/public-domain devotional music,
  * downloads the first suitable audio file, and loops it to VIDEO_DURATION_SECS.
  * Returns true on success, false if all candidates failed.
  */
 async function fetchInternetArchiveAudio(destPath) {
     console.log('  🌐  Internet Archive (CC/public-domain devotional music)…');
     const searchParams = new URLSearchParams({
-        q: 'subject:dhyana OR subject:bhajan OR subject:dhrupad OR krishna devotional',
+        q: 'subject:meditation OR subject:bhajan OR subject:kirtan OR subject:mantra OR (krishna devotional ambient)',
         mediatype: 'audio',
         'fl[]': 'identifier,title',
         rows: '10',
@@ -335,7 +438,7 @@ function synthesizeAmbientAudio(destPath) {
     ]);
 }
 
-/** Orchestrator: try Internet Archive first, fall back to ffmpeg synthesis. */
+/** Orchestrator: try ccMixter → Internet Archive → ffmpeg synthesis. */
 async function collectAudio() {
     const musicPath = path.join(MUSIC_DIR, 'om-devotional-ambient.aac');
     if (fs.existsSync(musicPath)) {
@@ -345,10 +448,13 @@ async function collectAudio() {
 
     console.log('\n🎵  Obtaining royalty-free background music…');
 
-    const iaSuccess = await fetchInternetArchiveAudio(musicPath);
-    if (!iaSuccess) {
-        console.warn('  ⚠  Internet Archive unavailable; falling back to local synthesis.');
-        synthesizeAmbientAudio(musicPath);
+    const ccSuccess = await fetchCcMixterAudio(musicPath);
+    if (!ccSuccess) {
+        const iaSuccess = await fetchInternetArchiveAudio(musicPath);
+        if (!iaSuccess) {
+            console.warn('  ⚠  All download sources unavailable; falling back to local synthesis.');
+            synthesizeAmbientAudio(musicPath);
+        }
     }
 
     console.log(`  ✅  Background audio ready: ${musicPath}`);
@@ -372,10 +478,15 @@ async function buildVideo(imagePaths, musicPath) {
             const zoomExpr = i % 2 === 0
                 ? `min(zoom+${ZOOM_RATE},${MAX_ZOOM})`
                 : `if(lte(zoom,1.0),${MAX_ZOOM},max(zoom-${ZOOM_RATE},1.0))`;
+            // Fade in over first second, fade out over last second.
+            // Warm golden eq: slightly brighter, more saturated, reds up, blues down.
+            const fadeOutStart = SECONDS_PER_IMAGE - 1;
             const vf =
                 `zoompan=z='${zoomExpr}':d=${totalFrames}` +
                 `:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'` +
-                `,scale=${TARGET_WIDTH}:${TARGET_HEIGHT},fps=${FPS}`;
+                `,scale=${TARGET_WIDTH}:${TARGET_HEIGHT},fps=${FPS}` +
+                `,fade=t=in:st=0:d=1,fade=t=out:st=${fadeOutStart}:d=1` +
+                `,eq=brightness=0.03:saturation=1.2:gamma_r=1.08:gamma_b=0.92`;
 
             console.log(`  🖼  Animating image ${i + 1}/${imagePaths.length}: ${path.basename(imagePaths[i])}`);
             runFFmpeg([
