@@ -1,0 +1,62 @@
+name: Generate Sample Quality-Test Video (2 min)
+
+# Run this workflow to quickly generate a 2-minute sample video for quality review.
+# The video is uploaded as a GitHub Actions artifact and can be downloaded from
+# the Actions → workflow run → Artifacts section.
+#
+# It uses the same effects as the full 15-min pipeline:
+#   • Ken-Burns alternating zoom-in / zoom-out
+#   • 1-second black fade in/out per slide
+#   • Warm golden EQ (saturation +20%, reds +8%, blues -8%)
+#   • 432 Hz harmonic ambient audio
+#
+# Images are sourced from public-domain museum APIs (no API keys required):
+#   Wikimedia Commons → Met Museum → Cleveland Museum → saffron placeholders
+
+on:
+  workflow_dispatch:
+
+jobs:
+  generate-sample:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install ffmpeg and ClamAV
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg clamav clamav-daemon
+          # Update virus definitions before downloading any content
+          sudo systemctl stop clamav-freshclam 2>/dev/null || true
+          sudo freshclam --quiet
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Generate 2-minute sample video
+        run: node scripts/generate-sample-video.js
+
+      - name: Show video metadata
+        run: |
+          echo "=== Sample Video Info ==="
+          ffmpeg -i library/videos/radha-krishna-sample-2min.mp4 2>&1 | grep -E "Duration|Stream"
+          ls -lh library/videos/radha-krishna-sample-2min.mp4
+
+      - name: Upload sample video artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: radha-krishna-sample-2min
+          path: |
+            library/videos/radha-krishna-sample-2min.mp4
+            library/assets/devotion/radha-krishna/images/sample-*.*
+          retention-days: 14
+          if-no-files-found: error
