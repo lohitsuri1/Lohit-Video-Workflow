@@ -14,6 +14,15 @@ Defaults:
 
 The script auto-downloads placeholder assets if the default files are missing.
 Run `python download_assets.py` first to fetch free/open-licensed assets.
+
+Auto quality enhancements applied on every run:
+  - Warm golden colour grade (saturation +20 %, reds +8 %, blues -8 %, brightness +3 %)
+  - Gentle sharpening        (unsharp 5×5 luma mask)
+  - 2-second black fade-in and fade-out
+  - libx264 CRF 20 with fast preset  (high quality, smaller file than default)
+  - Scale to 1920×1080 with letterbox padding
+  - AAC 192 kbps audio
+  - yuv420p for broad playback compatibility
 """
 
 import argparse
@@ -44,29 +53,58 @@ def check_ffmpeg() -> None:
         )
 
 
+def get_audio_duration(audio_path: str) -> float:
+    """Return the audio duration in seconds using ffprobe, or 0.0 on failure."""
+    result = subprocess.run(
+        ["ffprobe", "-v", "quiet", "-show_entries", "format=duration",
+         "-of", "csv=p=0", audio_path],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0 or not result.stdout.strip():
+        return 0.0
+    try:
+        return float(result.stdout.strip())
+    except ValueError:
+        return 0.0
+
+
 def generate_video(image_path: str, audio_path: str, output_path: str) -> None:
     """
     Combine *image_path* and *audio_path* into a high-quality MP4 at *output_path*.
 
-    FFmpeg settings:
-      - libx264 with -tune stillimage  → optimised for a single static frame
-      - scale to 1920×1080 with letterbox padding  → always 1080p output
-      - AAC audio at 192k bitrate
+    Auto quality enhancements:
+      - Warm golden colour grade  (saturation +20 %, reds +8 %, blues -8 %, brightness +3 %)
+      - Gentle sharpening         (unsharp 5×5 luma mask)
+      - 2-second black fade-in and fade-out
+      - libx264 CRF 20 with fast preset  → high quality, compact file
+      - Scale to 1920×1080 with letterbox padding
+      - AAC audio at 192 kbps
       - yuv420p pixel format for broad playback compatibility
       - -shortest  → video length equals the audio duration
     """
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
 
-    vf = (
-        "scale=1920:1080:force_original_aspect_ratio=decrease,"
-        "pad=1920:1080:(ow-iw)/2:(oh-ih)/2"
-    )
+    fps = 25
+    duration = get_audio_duration(audio_path)
+
+    vf_parts = [
+        "scale=1920:1080:force_original_aspect_ratio=decrease",
+        "pad=1920:1080:(ow-iw)/2:(oh-ih)/2",
+        f"fps={fps}",
+        # Auto quality enhancements
+        "unsharp=5:5:0.8:5:5:0.0",
+        "eq=brightness=0.03:saturation=1.2:gamma_r=1.08:gamma_b=0.92",
+        "fade=t=in:st=0:d=2",
+    ]
+    if duration > 4:
+        vf_parts.append(f"fade=t=out:st={duration - 2:.1f}:d=2")
+    vf = ",".join(vf_parts)
 
     cmd = [
         "ffmpeg", "-y",
         "-loop", "1", "-i", image_path,
         "-i", audio_path,
-        "-c:v", "libx264", "-tune", "stillimage",
+        "-c:v", "libx264", "-crf", "20", "-preset", "fast",
         "-c:a", "aac", "-b:a", "192k",
         "-vf", vf,
         "-pix_fmt", "yuv420p",
@@ -74,7 +112,8 @@ def generate_video(image_path: str, audio_path: str, output_path: str) -> None:
         output_path,
     ]
 
-    print("▶  Running FFmpeg …")
+    print("▶  Running FFmpeg with quality enhancements …")
+    print("   Filters: warm colour grade · sharpening · fade in/out")
     print("   " + " ".join(cmd))
     result = subprocess.run(cmd, capture_output=True, text=True)
 
@@ -85,6 +124,7 @@ def generate_video(image_path: str, audio_path: str, output_path: str) -> None:
 
     size_mb = os.path.getsize(output_path) / (1024 * 1024)
     print(f"\n✅  Video saved: {output_path} ({size_mb:.1f} MB)")
+    print("   Quality: 1920×1080 | CRF 20 | AAC 192k | Warm grade | Sharpened | Fade in/out")
 
 
 def parse_args() -> argparse.Namespace:

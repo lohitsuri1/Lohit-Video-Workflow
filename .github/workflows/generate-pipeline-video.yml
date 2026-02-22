@@ -37,9 +37,15 @@ jobs:
 
       - name: Download assets (with ffmpeg fallback)
         run: |
-          if ! python download_assets.py; then
-            echo "Network download failed – generating synthetic assets with FFmpeg"
+          echo "=== Downloading Devotional Assets ==="
+          if python download_assets.py; then
+            echo "ASSET_SOURCE=network" >> "$GITHUB_ENV"
+            echo "✅  Real devotional assets downloaded from internet sources"
+          else
+            echo "⚠️  Network download failed – generating synthetic placeholder assets with FFmpeg"
             python download_assets.py --synthetic
+            echo "ASSET_SOURCE=synthetic" >> "$GITHUB_ENV"
+            echo "ℹ️   Synthetic assets: saffron placeholder image + 432 Hz ambient audio"
           fi
 
       - name: Generate video
@@ -52,6 +58,19 @@ jobs:
             | grep -E "^(codec_name|width|height|duration|bit_rate|sample_rate)=" || \
             ffmpeg -i output/final_video.mp4 2>&1 | grep -E "Duration|Stream"
           ls -lh output/final_video.mp4
+          echo ""
+          echo "=== Auto Quality Enhancements Applied ==="
+          echo "  🎨  Warm golden colour grade (saturation +20%, reds +8%, blues -8%, brightness +3%)"
+          echo "  🔍  Gentle sharpening (unsharp 5×5 luma mask)"
+          echo "  🌅  2-second fade-in and fade-out"
+          echo "  🎬  libx264 CRF 20 | AAC 192k | yuv420p"
+          if [ "${ASSET_SOURCE}" = "network" ]; then
+            echo "  📷  Image source: Wikimedia Commons (public-domain Radha-Krishna painting)"
+            echo "  🎵  Audio source: Internet Archive (public-domain devotional music)"
+          else
+            echo "  📷  Image source: FFmpeg-generated placeholder (saffron 1920×1080)"
+            echo "  🎵  Audio source: FFmpeg-synthesized 432 Hz harmonic ambient tone"
+          fi
 
       - name: Upload video artifact
         uses: actions/upload-artifact@v4

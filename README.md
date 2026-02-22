@@ -66,18 +66,30 @@ python pipeline.py --image path/to/image.jpg --audio path/to/music.mp3 --output 
 ### Video Quality
 
 - Resolution: **1920×1080** (1080p) with letterbox padding
-- Video codec: **libx264** (`-tune stillimage`)
+- Video codec: **libx264** (CRF 20, `fast` preset — high quality, efficient encode)
 - Audio codec: **AAC 192k**
 - Pixel format: **yuv420p** (broad compatibility)
 - Duration: equals the audio track length
+- **Auto quality enhancements** applied by `pipeline.py`:
+  - 🎨 Warm golden colour grade (saturation +20%, reds +8%, blues -8%, brightness +3%)
+  - 🔍 Gentle sharpening (unsharp 5×5 luma mask)
+  - 🌅 2-second black fade-in and fade-out
 
-### FFmpeg Command Used
+### FFmpeg Filters Used
 
 ```bash
+# pipeline.py automatically detects audio duration and computes fade-out start.
+# The command below shows the structure; <duration-2> is replaced at runtime.
 ffmpeg -loop 1 -i assets/images/radha_krishna.jpg -i assets/music/background.mp3 \
-  -c:v libx264 -tune stillimage -c:a aac -b:a 192k \
-  -vf "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2" \
+  -c:v libx264 -crf 20 -preset fast -c:a aac -b:a 192k \
+  -vf "scale=1920:1080:force_original_aspect_ratio=decrease,
+       pad=1920:1080:(ow-iw)/2:(oh-ih)/2,fps=25,
+       unsharp=5:5:0.8:5:5:0.0,
+       eq=brightness=0.03:saturation=1.2:gamma_r=1.08:gamma_b=0.92,
+       fade=t=in:st=0:d=2,fade=t=out:st=<duration-2>:d=2" \
   -pix_fmt yuv420p -shortest output/final_video.mp4
+# Note: replace <duration-2> with your audio duration minus 2 (e.g. 178 for a 180s track).
+#       pipeline.py calculates this automatically via ffprobe.
 ```
 
 ---
