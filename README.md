@@ -1,4 +1,15 @@
-Download all the generated videos and use a free professional video editor like **DaVinci Resolve** (recommended for India 🇮🇳 — no watermark, no ban) or **VN Video Editor** (mobile) to create a final video. See [DaVinci Resolve Workflow Guide](docs/davinci-resolve-workflow.md) for step-by-step instructions. Check result below.
+## 🚀 Which GitHub Actions Workflow Should I Run?
+
+Go to the [Actions tab](https://github.com/lohitsuri1/Lohit-Video-Workflow/actions) and pick the workflow that matches your goal:
+
+| Workflow | What it produces | Best for |
+|---|---|---|
+| **Generate Radha-Krishna Devotional Video** | Full 15-minute 1080p devotional video — multiple public-domain images with Ken-Burns zoom, warm colour grade, devotional music. **Ready to share directly.** No API keys required; optional keys unlock richer assets. | ⭐ Best professional output |
+| **Generate Sample Quality-Test Video (2 min)** | 2-minute preview with identical effects (Ken-Burns, colour grade, ambient audio). Fast to run — use this first to check quality before committing to the full render. | Quality preview / test run |
+| **Generate Devotional Video (Python Pipeline)** | Simple 1080p video: one static image + background music. Great starting point or if you want to supply your own image/audio. | Simple / custom assets |
+
+> **Do I need DaVinci Resolve or another editor?**
+> No — every workflow above produces a fully polished, ready-to-share MP4 with colour grading, sharpening, and smooth fade transitions already baked in. An external editor is **entirely optional** if you want to add titles, cut clips, or do further creative work. See the [DaVinci Resolve Workflow Guide](docs/davinci-resolve-workflow.md) for instructions if you'd like to go that route.
 
 ---
 
@@ -25,8 +36,10 @@ brew install ffmpeg
 **Python dependencies:**
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements-pipeline.txt
 ```
+
+> 💡 **Using GitHub Actions?** The [Generate Devotional Video (Python Pipeline)](../../actions/workflows/generate-pipeline-video.yml) workflow installs all prerequisites (FFmpeg, Python dependencies, assets) automatically — no manual setup required.
 
 ### Quick Start
 

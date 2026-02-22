@@ -33,7 +33,7 @@ jobs:
           sudo apt-get install -y ffmpeg
 
       - name: Install Python dependencies
-        run: pip install requests tqdm
+        run: pip install -r requirements-pipeline.txt
 
       - name: Download assets (with ffmpeg fallback)
         run: |
