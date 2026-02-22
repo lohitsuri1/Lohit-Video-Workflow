@@ -6,6 +6,7 @@
  */
 
 import { GoogleGenAI } from '@google/genai';
+import { execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 
@@ -85,9 +86,37 @@ if (process.argv[1] && process.argv[1].includes('gemini-video')) {
         console.error('❌ GEMINI_API_KEY not set!');
         process.exit(1);
     }
-    await generateShortClip({
-        prompt: 'A golden sunset over ocean waves, cinematic style, smooth camera pan',
-        outputPath: './library/videos/test-clip.mp4',
-        apiKey,
-    });
+    const testOutputPath = './library/videos/test-clip.mp4';
+    try {
+        await generateShortClip({
+            prompt: 'A golden sunset over ocean waves, cinematic style, smooth camera pan',
+            outputPath: testOutputPath,
+            apiKey,
+        });
+    } catch (err) {
+        // Fall back to FFmpeg when the Gemini API is unavailable (e.g. billing not enabled)
+        if (err.message && (err.message.includes('FAILED_PRECONDITION') || err.message.includes('billing'))) {
+            console.warn('⚠️  Veo 2 requires GCP billing. Generating a fallback test video with FFmpeg...');
+            const outputDir = path.dirname(testOutputPath);
+            if (!fs.existsSync(outputDir)) {
+                fs.mkdirSync(outputDir, { recursive: true });
+            }
+            try {
+                execFileSync('ffmpeg', [
+                    '-y', '-f', 'lavfi',
+                    '-i', 'color=c=blue:size=1280x720:rate=30',
+                    '-t', '5',
+                    '-c:v', 'libx264',
+                    '-pix_fmt', 'yuv420p',
+                    testOutputPath,
+                ], { stdio: 'inherit' });
+                console.log(`✅ Fallback test video saved to: ${testOutputPath}`);
+            } catch (ffmpegErr) {
+                console.error('❌ FFmpeg fallback failed:', ffmpegErr.message);
+                throw ffmpegErr;
+            }
+        } else {
+            throw err;
+        }
+    }
 }
