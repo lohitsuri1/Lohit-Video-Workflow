@@ -4,23 +4,28 @@
  * Downloads royalty-free Radha-Krishna devotional images and audio from
  * multiple public sources, then stitches them into a 15-minute meditation video.
  *
- * Image sources (tried in order):
- *   1. Wikimedia Commons             – public-domain paintings via MediaWiki API
- *   2. Metropolitan Museum of Art    – public-domain Indian/Asian art (Open Access API)
- *   3. Cleveland Museum of Art       – public-domain Asian art (Open Access API)
- *   4. ffmpeg colour placeholders    – local fallback, no network needed
+ * Image sources (tried in order, API-key sources skipped when key not set):
+ *   1. Pixabay              – devotional illustrations  (PIXABAY_API_KEY  secret, free tier)
+ *   2. Pexels               – spiritual photography     (PEXELS_API_KEY   secret, free tier)
+ *   3. Wikimedia Commons    – public-domain paintings   (no key required)
+ *   4. Metropolitan Museum  – public-domain Indian art  (no key required)
+ *   5. Cleveland Museum     – public-domain Asian art   (no key required)
+ *   6. OpenAI DALL-E 3      – AI-generated art, fills gaps (OPENAI_API_KEY secret, paid)
+ *   7. ffmpeg colour placeholders – local fallback      (no key required)
  *
- * Audio sources (tried in order):
- *   1. ccMixter                      – Creative Commons music (no API key)
- *   2. Internet Archive (archive.org) – CC/public-domain devotional music (no API key)
- *   3. ffmpeg 432 Hz harmonic synthesis – local fallback, no network needed
+ * Audio sources (tried in order, API-key sources skipped when key not set):
+ *   1. Freesound.org   – real meditation ambient sounds (FREESOUND_API_KEY secret, free tier)
+ *   2. ccMixter        – Creative Commons music         (no key required)
+ *   3. Internet Archive – CC/public-domain devotional   (no key required)
+ *   4. ffmpeg 432 Hz harmonic synthesis – local fallback (no key required)
  *
  * Folder layout (created automatically):
  *   library/assets/devotion/radha-krishna/images/  – downloaded images
  *   library/assets/devotion/radha-krishna/music/   – downloaded/generated audio
  *   library/videos/radha-krishna-15min.mp4          – final video
  *
- * No external API keys are required.
+ * API keys are read from environment variables (set as GitHub Actions secrets).
+ * All sources with no key degrade gracefully when keys are absent.
  *
  * Note on Kling AI: Kling AI is a video/image *generation* service (like Veo/Sora)
  * that creates content from text prompts — it has no searchable public image library
@@ -60,9 +65,19 @@ const SEARCH_TIMEOUT_MS = 20_000;
 const INFO_TIMEOUT_MS = 15_000;
 const DOWNLOAD_TIMEOUT_MS = 20_000;
 
+// Maximum audio file size to download (keep CI fast)
+const MAX_AUDIO_FILE_SIZE_BYTES = 40_000_000; // 40 MB
+
 // Ken-Burns animation parameters
 const ZOOM_RATE = 0.0005;
 const MAX_ZOOM = 1.2;
+
+// Optional API keys – read from environment / GitHub Actions secrets.
+// Each source is silently skipped when its key is not set.
+const PIXABAY_API_KEY = process.env.PIXABAY_API_KEY ?? '';
+const PEXELS_API_KEY = process.env.PEXELS_API_KEY ?? '';
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY ?? '';
+const FREESOUND_API_KEY = process.env.FREESOUND_API_KEY ?? '';
 
 // Fallback colours used when an image cannot be downloaded (saffron palette)
 const FALLBACK_COLORS = [
@@ -255,6 +270,141 @@ async function fetchClevelandMuseumImages(targetCount) {
     return downloaded;
 }
 
+/** Source D: Pixabay – royalty-free devotional illustrations (requires PIXABAY_API_KEY). */
+async function fetchPixabayImages(targetCount) {
+    if (!PIXABAY_API_KEY) return [];
+    console.log(`  🖼  Pixabay (target: ${targetCount} images)…`);
+    const downloaded = [];
+
+    const queries = ['krishna radha devotional', 'krishna flute spiritual', 'radha krishna temple art'];
+    const seen = new Set();
+
+    for (const q of queries) {
+        if (seen.size >= targetCount + 5) break;
+        const searchUrl =
+            `https://pixabay.com/api/?key=${encodeURIComponent(PIXABAY_API_KEY)}` +
+            `&q=${encodeURIComponent(q)}&image_type=illustration&per_page=20&safesearch=true`;
+        try {
+            const res = await fetch(searchUrl, { signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS) });
+            const data = await res.json();
+            for (const hit of data.hits ?? []) {
+                seen.add(JSON.stringify({ url: hit.webformatURL, id: hit.id }));
+            }
+        } catch (err) {
+            console.warn(`    ⚠  Pixabay "${q}": ${err.message}`);
+        }
+    }
+
+    let idx = 1;
+    for (const itemStr of seen) {
+        if (downloaded.length >= targetCount) break;
+        const item = JSON.parse(itemStr);
+        try {
+            const destPath = path.join(IMAGES_DIR, `pixabay-${String(idx).padStart(2, '0')}.jpg`);
+            console.log(`    ⬇  pixabay-${String(idx).padStart(2, '0')}.jpg (id:${item.id})`);
+            await downloadFile(item.url, destPath);
+            downloaded.push(destPath);
+            idx++;
+        } catch (err) {
+            console.warn(`    ⚠  Pixabay id ${item.id}: ${err.message}`);
+        }
+    }
+    console.log(`    ✔  Pixabay: ${downloaded.length} image(s)`);
+    return downloaded;
+}
+
+/** Source E: Pexels – royalty-free spiritual photography (requires PEXELS_API_KEY). */
+async function fetchPexelsImages(targetCount) {
+    if (!PEXELS_API_KEY) return [];
+    console.log(`  📸  Pexels (target: ${targetCount} images)…`);
+    const downloaded = [];
+
+    const queries = ['krishna devotional art', 'radha krishna painting', 'hindu temple meditation'];
+    const seen = new Set();
+
+    for (const q of queries) {
+        if (seen.size >= targetCount + 5) break;
+        try {
+            const res = await fetch(
+                `https://api.pexels.com/v1/search?query=${encodeURIComponent(q)}&per_page=15&orientation=landscape`,
+                { headers: { Authorization: PEXELS_API_KEY }, signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS) }
+            );
+            const data = await res.json();
+            for (const photo of data.photos ?? []) {
+                seen.add(JSON.stringify({ url: photo.src.large2x ?? photo.src.large, id: photo.id }));
+            }
+        } catch (err) {
+            console.warn(`    ⚠  Pexels "${q}": ${err.message}`);
+        }
+    }
+
+    let idx = 1;
+    for (const itemStr of seen) {
+        if (downloaded.length >= targetCount) break;
+        const item = JSON.parse(itemStr);
+        try {
+            const destPath = path.join(IMAGES_DIR, `pexels-${String(idx).padStart(2, '0')}.jpg`);
+            console.log(`    ⬇  pexels-${String(idx).padStart(2, '0')}.jpg (id:${item.id})`);
+            await downloadFile(item.url, destPath);
+            downloaded.push(destPath);
+            idx++;
+        } catch (err) {
+            console.warn(`    ⚠  Pexels id ${item.id}: ${err.message}`);
+        }
+    }
+    console.log(`    ✔  Pexels: ${downloaded.length} image(s)`);
+    return downloaded;
+}
+
+/**
+ * Source F: OpenAI DALL-E 3 – generates custom Radha-Krishna devotional art
+ * (requires OPENAI_API_KEY; used last to fill remaining slots, ~$0.04/image).
+ */
+async function generateDallEImages(targetCount) {
+    if (!OPENAI_API_KEY) return [];
+    console.log(`  🤖  OpenAI DALL-E 3 (generating ${targetCount} custom devotional image(s))…`);
+    const downloaded = [];
+
+    // Five distinct painting styles rotated across the slides
+    const prompts = [
+        'Sacred painting of Radha and Krishna together in Vrindavan forest, traditional Rajasthani miniature painting style, warm golden hues, lotus flowers, peacocks, devotional meditative atmosphere',
+        'Sri Krishna playing bansuri flute under a kadamba tree at twilight, traditional Pahari painting style, vivid jewel-toned colors, moonlit sky, divine luminous aura',
+        'Radha Krishna Ras Lila dance scene, traditional Madhubani art style, intricate colorful floral patterns, joyful spiritual celebration, golden warm tones',
+        'Lord Krishna with divine lotus and conch shell, traditional Tanjore painting style, embossed gold leaf background, jeweled crown, serene meditative expression',
+        'Radha offering marigold garland to Krishna in garden, traditional Pichvai painting style, sacred cows, roses, spiritual devotion scene, soft saffron sunset light',
+    ];
+
+    let idx = 1;
+    for (let i = 0; i < targetCount; i++) {
+        const prompt = prompts[i % prompts.length];
+        try {
+            const res = await fetch('https://api.openai.com/v1/images/generations', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_API_KEY}` },
+                body: JSON.stringify({ model: 'dall-e-3', prompt, n: 1, size: '1792x1024', quality: 'standard' }),
+                signal: AbortSignal.timeout(90_000),
+            });
+            if (!res.ok) {
+                const errData = await res.json();
+                throw new Error(errData.error?.message ?? `HTTP ${res.status}`);
+            }
+            const data = await res.json();
+            const imageUrl = data.data?.[0]?.url;
+            if (!imageUrl) continue;
+
+            const destPath = path.join(IMAGES_DIR, `dalle-${String(idx).padStart(2, '0')}.jpg`);
+            console.log(`    ⬇  dalle-${String(idx).padStart(2, '0')}.jpg (style ${(i % prompts.length) + 1})`);
+            await downloadFile(imageUrl, destPath);
+            downloaded.push(destPath);
+            idx++;
+        } catch (err) {
+            console.warn(`    ⚠  DALL-E 3 image ${i + 1}: ${err.message}`);
+        }
+    }
+    console.log(`    ✔  DALL-E 3: ${downloaded.length} image(s)`);
+    return downloaded;
+}
+
 /**
  * Orchestrator: collect NUM_IMAGES images from all sources,
  * filling any gap with ffmpeg colour placeholders.
@@ -262,20 +412,35 @@ async function fetchClevelandMuseumImages(targetCount) {
 async function collectImages() {
     console.log('\n📷  Collecting Radha-Krishna images from royalty-free sources…');
 
-    // Try Wikimedia first
-    const wikimediaImages = await fetchWikimediaImages(NUM_IMAGES);
-    let allImages = [...wikimediaImages];
+    // API-key sources first (best quality when keys are available)
+    const pixabayImages = await fetchPixabayImages(NUM_IMAGES);
+    let allImages = [...pixabayImages];
 
-    // Fill remaining slots from Met Museum
+    if (allImages.length < NUM_IMAGES) {
+        const pexelsImages = await fetchPexelsImages(NUM_IMAGES - allImages.length);
+        allImages = [...allImages, ...pexelsImages];
+    }
+
+    // No-key museum sources
+    if (allImages.length < NUM_IMAGES) {
+        const wikimediaImages = await fetchWikimediaImages(NUM_IMAGES - allImages.length);
+        allImages = [...allImages, ...wikimediaImages];
+    }
+
     if (allImages.length < NUM_IMAGES) {
         const metImages = await fetchMetMuseumImages(NUM_IMAGES - allImages.length);
         allImages = [...allImages, ...metImages];
     }
 
-    // Fill remaining slots from Cleveland Museum of Art
     if (allImages.length < NUM_IMAGES) {
         const cmaImages = await fetchClevelandMuseumImages(NUM_IMAGES - allImages.length);
         allImages = [...allImages, ...cmaImages];
+    }
+
+    // DALL-E 3 fills any remaining gaps (only charges for what's actually needed)
+    if (allImages.length < NUM_IMAGES) {
+        const dalleImages = await generateDallEImages(NUM_IMAGES - allImages.length);
+        allImages = [...allImages, ...dalleImages];
     }
 
     // Fill any remaining with ffmpeg colour placeholders
@@ -300,7 +465,63 @@ async function collectImages() {
 // ── Step 2: Obtain background music from royalty-free sources ─────────────────
 
 /**
- * Source A: ccMixter – Creative Commons licensed music (no API key required).
+ * Source A: Freesound.org – real meditation ambient sounds via HQ preview URLs.
+ * (requires FREESOUND_API_KEY; free tier, no OAuth needed for previews)
+ */
+async function fetchFreesoundAudio(destPath) {
+    if (!FREESOUND_API_KEY) return false;
+    console.log('  🔔  Freesound.org (meditation ambient sounds)…');
+
+    const searchParams = new URLSearchParams({
+        query: 'meditation bells ambient om',
+        token: FREESOUND_API_KEY,
+        fields: 'id,name,previews,duration',
+        filter: 'duration:[60 TO *]',
+        sort: 'rating_desc',
+        page_size: '10',
+    });
+    let sounds = [];
+    try {
+        const res = await fetch(`https://freesound.org/apiv2/search/text/?${searchParams}`,
+            { signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS) });
+        const data = await res.json();
+        sounds = data.results ?? [];
+        console.log(`    Found ${sounds.length} candidate sound(s)`);
+    } catch (err) {
+        console.warn(`    ⚠  Freesound search failed: ${err.message}`);
+        return false;
+    }
+
+    const tmpAudio = path.join(MUSIC_DIR, '_freesound_tmp');
+
+    for (const sound of sounds) {
+        // HQ preview URLs are publicly accessible without OAuth
+        const previewUrl = sound.previews?.['preview-hq-mp3'];
+        if (!previewUrl) continue;
+        try {
+            console.log(`    ⬇  "${sound.name}" (${Math.round(sound.duration)}s)`);
+            await downloadFile(previewUrl, tmpAudio);
+
+            console.log(`    🔁  Looping to ${VIDEO_DURATION_SECS}s…`);
+            runFFmpeg([
+                '-y', '-stream_loop', '-1', '-i', tmpAudio,
+                '-t', String(VIDEO_DURATION_SECS),
+                '-c:a', 'aac', '-b:a', '128k',
+                destPath,
+            ]);
+            fs.unlinkSync(tmpAudio);
+            console.log('    ✔  Freesound audio ready');
+            return true;
+        } catch (err) {
+            console.warn(`    ⚠  Freesound sound ${sound.id}: ${err.message}`);
+            if (fs.existsSync(tmpAudio)) fs.unlinkSync(tmpAudio);
+        }
+    }
+    return false;
+}
+
+/**
+ * Source B: ccMixter – Creative Commons licensed music (no API key required).
  * Searches for ambient/meditation tracks, downloads and loops to VIDEO_DURATION_SECS.
  * Returns true on success, false if all candidates failed.
  */
@@ -349,14 +570,14 @@ async function fetchCcMixterAudio(destPath) {
 }
 
 /**
- * Source B: Internet Archive – searches for CC/public-domain devotional music,
+ * Source C: Internet Archive – searches for CC/public-domain devotional music,
  * downloads the first suitable audio file, and loops it to VIDEO_DURATION_SECS.
  * Returns true on success, false if all candidates failed.
  */
 async function fetchInternetArchiveAudio(destPath) {
     console.log('  🌐  Internet Archive (CC/public-domain devotional music)…');
     const searchParams = new URLSearchParams({
-        q: 'subject:meditation OR subject:bhajan OR subject:kirtan OR subject:mantra OR (krishna devotional ambient)',
+        q: 'subject:meditation OR subject:bhajan OR subject:kirtan OR subject:mantra OR subject:krishna',
         mediatype: 'audio',
         'fl[]': 'identifier,title',
         rows: '10',
@@ -384,9 +605,9 @@ async function fetchInternetArchiveAudio(destPath) {
             );
             const filesData = await filesRes.json();
 
-            // Pick the smallest MP3/OGG under 40 MB to keep CI fast
+            // Pick the smallest MP3/OGG under MAX_AUDIO_FILE_SIZE_BYTES to keep CI fast
             const audioFile = (filesData.result ?? [])
-                .filter(f => /\.(mp3|ogg)$/i.test(f.name) && parseInt(f.size ?? '0', 10) < 40_000_000)
+                .filter(f => /\.(mp3|ogg)$/i.test(f.name) && parseInt(f.size ?? '0', 10) < MAX_AUDIO_FILE_SIZE_BYTES)
                 .reduce((smallest, f) =>
                     !smallest || parseInt(f.size ?? '0', 10) < parseInt(smallest.size ?? '0', 10) ? f : smallest
                 , null);
@@ -418,7 +639,7 @@ async function fetchInternetArchiveAudio(destPath) {
     return false;
 }
 
-/** Source B (fallback): synthesise a 432 Hz harmonic ambient track with ffmpeg. */
+/** Source D (fallback): synthesise a 432 Hz harmonic ambient track with ffmpeg. */
 function synthesizeAmbientAudio(destPath) {
     console.log('  🎹  Synthesising 432 Hz devotional ambient audio with ffmpeg…');
     const overtones = [
@@ -438,7 +659,7 @@ function synthesizeAmbientAudio(destPath) {
     ]);
 }
 
-/** Orchestrator: try ccMixter → Internet Archive → ffmpeg synthesis. */
+/** Orchestrator: try Freesound → ccMixter → Internet Archive → ffmpeg synthesis. */
 async function collectAudio() {
     const musicPath = path.join(MUSIC_DIR, 'om-devotional-ambient.aac');
     if (fs.existsSync(musicPath)) {
@@ -448,12 +669,15 @@ async function collectAudio() {
 
     console.log('\n🎵  Obtaining royalty-free background music…');
 
-    const ccSuccess = await fetchCcMixterAudio(musicPath);
-    if (!ccSuccess) {
-        const iaSuccess = await fetchInternetArchiveAudio(musicPath);
-        if (!iaSuccess) {
-            console.warn('  ⚠  All download sources unavailable; falling back to local synthesis.');
-            synthesizeAmbientAudio(musicPath);
+    const fsSuccess = await fetchFreesoundAudio(musicPath);
+    if (!fsSuccess) {
+        const ccSuccess = await fetchCcMixterAudio(musicPath);
+        if (!ccSuccess) {
+            const iaSuccess = await fetchInternetArchiveAudio(musicPath);
+            if (!iaSuccess) {
+                console.warn('  ⚠  All download sources unavailable; falling back to local synthesis.');
+                synthesizeAmbientAudio(musicPath);
+            }
         }
     }
 
@@ -479,7 +703,7 @@ async function buildVideo(imagePaths, musicPath) {
                 ? `min(zoom+${ZOOM_RATE},${MAX_ZOOM})`
                 : `if(lte(zoom,1.0),${MAX_ZOOM},max(zoom-${ZOOM_RATE},1.0))`;
             // Fade in over first second, fade out over last second.
-            // Warm golden eq: slightly brighter, more saturated, reds up, blues down.
+            // Warm golden EQ: slightly brighter, more saturated, reds up, blues down.
             const fadeOutStart = SECONDS_PER_IMAGE - 1;
             const vf =
                 `zoompan=z='${zoomExpr}':d=${totalFrames}` +

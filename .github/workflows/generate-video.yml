@@ -25,6 +25,13 @@ jobs:
         run: npm install
 
       - name: Generate Radha-Krishna devotional video (royalty-free)
+        env:
+          # Optional API keys – add as GitHub repository secrets for richer assets.
+          # All sources degrade gracefully when the key is absent.
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}    # free tier – devotional illustrations
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}      # free tier – spiritual photography
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}      # paid     – DALL-E 3 custom art (~$0.04/img)
+          FREESOUND_API_KEY: ${{ secrets.FREESOUND_API_KEY }} # free tier – meditation ambient sounds
         run: node scripts/generate-devotional-video.js
 
       - name: Upload generated video
