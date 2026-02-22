@@ -25,8 +25,10 @@ brew install ffmpeg
 **Python dependencies:**
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements-pipeline.txt
 ```
+
+> 💡 **Using GitHub Actions?** The [Generate Devotional Video (Python Pipeline)](../../actions/workflows/generate-pipeline-video.yml) workflow installs all prerequisites (FFmpeg, Python dependencies, assets) automatically — no manual setup required.
 
 ### Quick Start
 

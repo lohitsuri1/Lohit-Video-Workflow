@@ -1,0 +1,8 @@
+# Python dependencies for the basic video pipeline (pipeline.py + download_assets.py)
+# Install with: pip install -r requirements-pipeline.txt
+#
+# For full local-model support (Stable Diffusion, etc.) use requirements.txt instead.
+
+requests>=2.31.0
+tqdm>=4.66.0
+ffmpeg-python>=0.2.0
