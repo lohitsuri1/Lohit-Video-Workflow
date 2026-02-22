@@ -128,28 +128,49 @@ async function generateImageFallbackVideo({ ai, prompt, outputPath, aspectRatio,
     };
     const imagenRatio = imagenRatioMap[aspectRatio] || '16:9';
 
-    console.log('[Gemini Video] Generating frame with Imagen-3 (free tier)...');
-    const imgResponse = await ai.models.generateImages({
-        model: 'imagen-3.0-generate-002',
-        prompt: prompt,
-        config: {
-            numberOfImages: 1,
-            aspectRatio: imagenRatio,
-        },
-    });
-
-    const imageData = imgResponse?.generatedImages?.[0]?.image?.imageBytes;
-    if (!imageData) {
-        throw new Error('[Gemini Video] Imagen-3 returned no image data');
-    }
-
-    // Write the image to a temp file
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gemini-video-'));
     const framePath = path.join(tmpDir, 'frame.jpg');
 
+    // Try Imagen-3 first; fall back to a pure-ffmpeg colour frame if the
+    // model is unavailable (e.g. not enabled for this API key or region).
+    let usedImagenFrame = false;
     try {
+        console.log('[Gemini Video] Generating frame with Imagen-3 (free tier)...');
+        const imgResponse = await ai.models.generateImages({
+            model: 'imagen-3.0-generate-001',
+            prompt: prompt,
+            config: {
+                numberOfImages: 1,
+                aspectRatio: imagenRatio,
+            },
+        });
+
+        const imageData = imgResponse?.generatedImages?.[0]?.image?.imageBytes;
+        if (!imageData) {
+            throw new Error('[Gemini Video] Imagen-3 returned no image data');
+        }
         fs.writeFileSync(framePath, Buffer.from(imageData, 'base64'));
+        usedImagenFrame = true;
         console.log('[Gemini Video] Frame saved, composing video with ffmpeg...');
+    } catch (imagenErr) {
+        console.warn(`[Gemini Video] ⚠️  Imagen-3 unavailable (${imagenErr?.status ?? imagenErr?.message ?? String(imagenErr)}). ` +
+            'Generating a plain colour frame with ffmpeg.');
+        const genResult = spawnSync('ffmpeg', [
+            '-y', '-f', 'lavfi',
+            '-i', 'color=c=0x1a0a2e:size=1280x720:rate=1',
+            '-frames:v', '1',
+            framePath,
+        ], { stdio: 'inherit' });
+        if (genResult.status !== 0) {
+            throw new Error('[Gemini Video] ffmpeg colour-frame generation failed. Is ffmpeg installed?');
+        }
+    }
+
+    if (!usedImagenFrame) {
+        console.log('[Gemini Video] Colour frame ready, composing video with ffmpeg...');
+    }
+
+    try {
 
         // Build a Ken-Burns zoom effect using ffmpeg's zoompan filter.
         // The total frame count drives the duration of the effect.

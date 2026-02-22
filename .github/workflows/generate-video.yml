@@ -1,4 +1,4 @@
-name: Generate Test Video with Gemini Veo
+name: Generate Radha-Krishna Devotional Video
 
 on:
   workflow_dispatch:
@@ -24,15 +24,13 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Generate short video clip
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: node server/services/gemini-video.js
+      - name: Generate Radha-Krishna devotional video (royalty-free)
+        run: node scripts/generate-devotional-video.js
 
       - name: Upload generated video
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: generated-video
-          path: library/videos/test-clip.mp4
+          name: radha-krishna-devotional-video
+          path: library/videos/radha-krishna-15min.mp4
           if-no-files-found: warn
