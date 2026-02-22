@@ -16,6 +16,9 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Install ffmpeg
+        run: sudo apt-get install -y ffmpeg
+
       - name: Install dependencies
         run: npm install
 
@@ -23,3 +26,11 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: node server/services/gemini-video.js
+
+      - name: Upload generated video
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-video
+          path: library/videos/test-clip.mp4
+          if-no-files-found: warn
