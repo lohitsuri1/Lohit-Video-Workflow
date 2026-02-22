@@ -15,9 +15,8 @@
  *
  * Audio sources (tried in order, API-key sources skipped when key not set):
  *   1. Freesound.org   – real meditation ambient sounds (FREESOUND_API_KEY secret, free tier)
- *   2. ccMixter        – Creative Commons music         (no key required)
- *   3. Internet Archive – CC/public-domain devotional   (no key required)
- *   4. ffmpeg 432 Hz harmonic synthesis – local fallback (no key required)
+ *   2. Internet Archive  – CC/public-domain devotional music  (no key required)
+ *   3. ffmpeg 432 Hz harmonic synthesis – local fallback       (no key required)
  *
  * Folder layout (created automatically):
  *   library/assets/devotion/radha-krishna/images/  – downloaded images
@@ -38,7 +37,6 @@
 
 import fs from 'fs';
 import https from 'https';
-import http from 'http';
 import os from 'os';
 import path from 'path';
 import { spawnSync } from 'child_process';
@@ -72,11 +70,14 @@ const MAX_AUDIO_FILE_SIZE_BYTES = 40_000_000; // 40 MB
 const ZOOM_RATE = 0.0005;
 const MAX_ZOOM = 1.2;
 
+// User-Agent sent with API requests to comply with Wikimedia's bot policy.
+const USER_AGENT = 'DevotionalVideoBot/1.0 (github.com/lohitsuri1/Lohit-Video-Workflow)';
+
 // Optional API keys – read from environment / GitHub Actions secrets.
 // Each source is silently skipped when its key is not set.
-const PIXABAY_API_KEY = process.env.PIXABAY_API_KEY ?? '';
-const PEXELS_API_KEY = process.env.PEXELS_API_KEY ?? '';
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY ?? '';
+const PIXABAY_API_KEY   = process.env.PIXABAY_API_KEY   ?? '';
+const PEXELS_API_KEY    = process.env.PEXELS_API_KEY    ?? '';
+const OPENAI_API_KEY    = process.env.OPENAI_API_KEY    ?? '';
 const FREESOUND_API_KEY = process.env.FREESOUND_API_KEY ?? '';
 
 // Fallback colours used when an image cannot be downloaded (saffron palette)
@@ -89,16 +90,96 @@ const FALLBACK_COLORS = [
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
+/**
+ * Scan a downloaded file with ClamAV.
+ * Deletes the file and throws if it is infected.
+ * Logs a warning and returns (does NOT throw) when clamscan is not installed so
+ * the script still works in local-dev environments without ClamAV.
+ */
+function scanFile(filePath) {
+    const which = spawnSync('which', ['clamscan'], { encoding: 'utf8' });
+    if (which.status !== 0) {
+        console.warn(`    ⚠  [Security] clamscan not found – AV scan skipped for ${path.basename(filePath)}`);
+        return;
+    }
+    const result = spawnSync(
+        'clamscan',
+        ['--no-summary', '--infected', filePath],
+        { stdio: 'pipe' }
+    );
+    // exit 0 = clean, 1 = virus found, 2 = scan error
+    if (result.status === 1) {
+        const stdout = (result.stdout?.toString() ?? '').trim();
+        try {
+            fs.unlinkSync(filePath);
+        } catch (delErr) {
+            if (delErr.code !== 'ENOENT') {
+                console.warn(`    ⚠  [Security] Could not delete infected file ${path.basename(filePath)}: ${delErr.message}`);
+            }
+        }
+        throw new Error(`[Security] Malware detected in ${path.basename(filePath)}: ${stdout}`);
+    }
+    if (result.status === 2) {
+        console.warn(`    ⚠  [Security] ClamAV scan error for ${path.basename(filePath)}: ` +
+            (result.stderr?.toString().trim() ?? 'unknown error'));
+        return;
+    }
+    console.log(`    🛡  ${path.basename(filePath)} passed AV scan`);
+}
+
+/**
+ * Validate the magic bytes of a downloaded file to ensure it matches the
+ * expected type ('image' or 'audio').  Deletes the file and throws on mismatch.
+ */
+function validateFileHeader(filePath, type) {
+    const fd = fs.openSync(filePath, 'r');
+    const buf = Buffer.alloc(12);
+    fs.readSync(fd, buf, 0, 12, 0);
+    fs.closeSync(fd);
+
+    const isJPEG = buf[0] === 0xFF && buf[1] === 0xD8;
+    const isPNG  = buf[0] === 0x89 && buf.slice(1, 4).toString() === 'PNG';
+    const isMP3  = (buf[0] === 0xFF && (buf[1] & 0xE0) === 0xE0) ||
+                   buf.slice(0, 3).toString() === 'ID3';
+    const isOGG  = buf.slice(0, 4).toString() === 'OggS';
+    const isAAC  = buf[0] === 0xFF && (buf[1] & 0xF6) === 0xF0;
+    const isWebP = buf.slice(0, 4).toString() === 'RIFF' && buf.slice(8, 12).toString() === 'WEBP';
+
+    const valid = type === 'image' ? (isJPEG || isPNG || isWebP)
+                                   : (isMP3  || isOGG || isAAC);
+    if (!valid) {
+        try {
+            fs.unlinkSync(filePath);
+        } catch (delErr) {
+            if (delErr.code !== 'ENOENT') {
+                console.warn(`    ⚠  [Security] Could not delete invalid file ${path.basename(filePath)}: ${delErr.message}`);
+            }
+        }
+        throw new Error(
+            `[Security] Unexpected file header for ${path.basename(filePath)} ` +
+            `(expected ${type}, got 0x${buf.slice(0, 4).toString('hex')})`
+        );
+    }
+}
+
 /** Download a URL to destPath, following up to maxRedirects redirects. */
-function downloadFile(url, destPath, maxRedirects = 8) {
+function downloadFile(url, destPath, maxRedirects = 8, extraHeaders = {}) {
     return new Promise((resolve, reject) => {
         if (maxRedirects <= 0) return reject(new Error('Too many redirects'));
-        const protocol = url.startsWith('https://') ? https : http;
-        const req = protocol.get(url, { timeout: DOWNLOAD_TIMEOUT_MS }, (res) => {
+        // Security: only allow HTTPS to prevent MITM on plain-HTTP connections
+        if (!url.startsWith('https://')) {
+            return reject(new Error(`[Security] Refusing non-HTTPS URL: ${url}`));
+        }
+        const reqOptions = {
+            timeout: DOWNLOAD_TIMEOUT_MS,
+            // User-Agent is always set last to prevent callers overriding it
+            headers: { ...extraHeaders, 'User-Agent': USER_AGENT },
+        };
+        const req = https.get(url, reqOptions, (res) => {
             if ([301, 302, 307, 308].includes(res.statusCode)) {
                 const loc = res.headers.location;
                 res.resume();
-                downloadFile(loc, destPath, maxRedirects - 1).then(resolve).catch(reject);
+                downloadFile(loc, destPath, maxRedirects - 1, extraHeaders).then(resolve).catch(reject);
                 return;
             }
             if (res.statusCode !== 200) {
@@ -143,7 +224,10 @@ async function fetchWikimediaImages(targetCount) {
             'https://commons.wikimedia.org/w/api.php?action=query&list=search' +
             `&srsearch=${encodeURIComponent(query)}&srnamespace=6&srlimit=10&format=json`;
         try {
-            const res = await fetch(apiUrl, { signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS) });
+            const res = await fetch(apiUrl, {
+                headers: { 'User-Agent': USER_AGENT },
+                signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS),
+            });
             const data = await res.json();
             for (const item of data.query?.search ?? []) {
                 if (/\.(jpe?g|png)$/i.test(item.title)) fileNames.add(item.title);
@@ -164,7 +248,10 @@ async function fetchWikimediaImages(targetCount) {
             `&titles=${encodeURIComponent(title)}&prop=imageinfo` +
             `&iiprop=url&iiurlwidth=${TARGET_WIDTH}&format=json`;
         try {
-            const res = await fetch(infoUrl, { signal: AbortSignal.timeout(INFO_TIMEOUT_MS) });
+            const res = await fetch(infoUrl, {
+                headers: { 'User-Agent': USER_AGENT },
+                signal: AbortSignal.timeout(INFO_TIMEOUT_MS),
+            });
             const data = await res.json();
             const page = Object.values(data.query?.pages ?? {})[0];
             const imageUrl = page?.imageinfo?.[0]?.thumburl ?? page?.imageinfo?.[0]?.url;
@@ -174,6 +261,8 @@ async function fetchWikimediaImages(targetCount) {
             const destPath = path.join(IMAGES_DIR, `wm-${String(idx).padStart(2, '0')}${ext}`);
             console.log(`    ⬇  wm-${String(idx).padStart(2, '0')}${ext}`);
             await downloadFile(imageUrl, destPath);
+            validateFileHeader(destPath, 'image');
+            scanFile(destPath);
             downloaded.push(destPath);
             idx++;
         } catch (err) {
@@ -189,10 +278,12 @@ async function fetchMetMuseumImages(targetCount) {
     console.log(`  🏛   Metropolitan Museum of Art API (target: ${targetCount} images)…`);
     const downloaded = [];
 
-    // Department 6 = Asian Art (includes South Asian/Indian paintings)
+    // Search for Indian devotional paintings (public-domain, must have images).
+    // "india devotional painting" returns 238 relevant Asian Art results.
+    // Note: q=krishna returns 39 unrelated results (matches donor/catalog names).
     const searchUrl =
         'https://collectionapi.metmuseum.org/public/collection/v1/search?' +
-        'q=krishna+radha&isPublicDomain=true&departmentId=6';
+        'q=india+devotional+painting&isPublicDomain=true&hasImages=true';
     try {
         const res = await fetch(searchUrl, { signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS) });
         const data = await res.json();
@@ -216,6 +307,8 @@ async function fetchMetMuseumImages(targetCount) {
                 const title = (obj.title ?? 'Untitled').slice(0, 40);
                 console.log(`    ⬇  met-${String(idx).padStart(2, '0')}${ext}  "${title}"`);
                 await downloadFile(imageUrl, destPath);
+                validateFileHeader(destPath, 'image');
+                scanFile(destPath);
                 downloaded.push(destPath);
                 idx++;
             } catch (err) {
@@ -257,6 +350,8 @@ async function fetchClevelandMuseumImages(targetCount) {
                 const title = (art.title ?? 'Untitled').slice(0, 40);
                 console.log(`    ⬇  cma-${String(idx).padStart(2, '0')}${ext}  "${title}"`);
                 await downloadFile(imageUrl, destPath);
+                validateFileHeader(destPath, 'image');
+                scanFile(destPath);
                 downloaded.push(destPath);
                 idx++;
             } catch (err) {
@@ -303,6 +398,8 @@ async function fetchPixabayImages(targetCount) {
             const destPath = path.join(IMAGES_DIR, `pixabay-${String(idx).padStart(2, '0')}.jpg`);
             console.log(`    ⬇  pixabay-${String(idx).padStart(2, '0')}.jpg (id:${item.id})`);
             await downloadFile(item.url, destPath);
+            validateFileHeader(destPath, 'image');
+            scanFile(destPath);
             downloaded.push(destPath);
             idx++;
         } catch (err) {
@@ -346,6 +443,8 @@ async function fetchPexelsImages(targetCount) {
             const destPath = path.join(IMAGES_DIR, `pexels-${String(idx).padStart(2, '0')}.jpg`);
             console.log(`    ⬇  pexels-${String(idx).padStart(2, '0')}.jpg (id:${item.id})`);
             await downloadFile(item.url, destPath);
+            validateFileHeader(destPath, 'image');
+            scanFile(destPath);
             downloaded.push(destPath);
             idx++;
         } catch (err) {
@@ -395,6 +494,8 @@ async function generateDallEImages(targetCount) {
             const destPath = path.join(IMAGES_DIR, `dalle-${String(idx).padStart(2, '0')}.jpg`);
             console.log(`    ⬇  dalle-${String(idx).padStart(2, '0')}.jpg (style ${(i % prompts.length) + 1})`);
             await downloadFile(imageUrl, destPath);
+            validateFileHeader(destPath, 'image');
+            scanFile(destPath);
             downloaded.push(destPath);
             idx++;
         } catch (err) {
@@ -501,6 +602,8 @@ async function fetchFreesoundAudio(destPath) {
         try {
             console.log(`    ⬇  "${sound.name}" (${Math.round(sound.duration)}s)`);
             await downloadFile(previewUrl, tmpAudio);
+            validateFileHeader(tmpAudio, 'audio');
+            scanFile(tmpAudio);
 
             console.log(`    🔁  Looping to ${VIDEO_DURATION_SECS}s…`);
             runFFmpeg([
@@ -521,64 +624,16 @@ async function fetchFreesoundAudio(destPath) {
 }
 
 /**
- * Source B: ccMixter – Creative Commons licensed music (no API key required).
- * Searches for ambient/meditation tracks, downloads and loops to VIDEO_DURATION_SECS.
- * Returns true on success, false if all candidates failed.
- */
-async function fetchCcMixterAudio(destPath) {
-    console.log('  🎼  ccMixter (Creative Commons ambient/meditation music)…');
-    const searchUrl = 'https://ccmixter.org/api/query?f=json&search=meditation+ambient+peaceful&limit=10';
-    let tracks = [];
-    try {
-        const res = await fetch(searchUrl, { signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS) });
-        tracks = await res.json();
-        console.log(`    Found ${tracks.length} candidate track(s)`);
-    } catch (err) {
-        console.warn(`    ⚠  ccMixter search failed: ${err.message}`);
-        return false;
-    }
-
-    const tmpAudio = path.join(MUSIC_DIR, '_ccmixter_tmp');
-
-    for (const track of tracks) {
-        // The API returns upload_file[] with a download_url per file
-        const fileUrl = (track.upload_file ?? [])
-            .find(f => /\.mp3$/i.test(f.file_name ?? ''))?.download_url;
-        if (!fileUrl) continue;
-        try {
-            const title = track.upload_name ?? track.upload_id ?? 'unknown';
-            const artist = track.user_name ?? 'unknown';
-            console.log(`    ⬇  "${title}" by ${artist}`);
-            await downloadFile(fileUrl, tmpAudio);
-
-            console.log(`    🔁  Looping to ${VIDEO_DURATION_SECS}s…`);
-            runFFmpeg([
-                '-y', '-stream_loop', '-1', '-i', tmpAudio,
-                '-t', String(VIDEO_DURATION_SECS),
-                '-c:a', 'aac', '-b:a', '128k',
-                destPath,
-            ]);
-            fs.unlinkSync(tmpAudio);
-            console.log('    ✔  ccMixter audio ready');
-            return true;
-        } catch (err) {
-            console.warn(`    ⚠  ${track.upload_id}: ${err.message}`);
-            if (fs.existsSync(tmpAudio)) fs.unlinkSync(tmpAudio);
-        }
-    }
-    return false;
-}
-
-/**
- * Source C: Internet Archive – searches for CC/public-domain devotional music,
+ * Source B: Internet Archive – searches for CC/public-domain devotional music,
  * downloads the first suitable audio file, and loops it to VIDEO_DURATION_SECS.
  * Returns true on success, false if all candidates failed.
  */
 async function fetchInternetArchiveAudio(destPath) {
     console.log('  🌐  Internet Archive (CC/public-domain devotional music)…');
+    // The IA advancedsearch API requires mediatype to be part of the Lucene q string,
+    // not a separate parameter.
     const searchParams = new URLSearchParams({
-        q: 'subject:meditation OR subject:bhajan OR subject:kirtan OR subject:mantra OR subject:krishna',
-        mediatype: 'audio',
+        q: 'mediatype:audio AND (subject:meditation OR subject:bhajan OR subject:kirtan OR subject:mantra OR subject:krishna)',
         'fl[]': 'identifier,title',
         rows: '10',
         output: 'json',
@@ -619,6 +674,8 @@ async function fetchInternetArchiveAudio(destPath) {
             const sizeMB = (parseInt(audioFile.size ?? '0', 10) / 1024 / 1024).toFixed(1);
             console.log(`    ⬇  "${doc.title ?? doc.identifier}" – ${audioFile.name} (${sizeMB} MB)`);
             await downloadFile(audioUrl, tmpAudio);
+            validateFileHeader(tmpAudio, 'audio');
+            scanFile(tmpAudio);
 
             // Loop the downloaded audio to the full video duration
             console.log(`    🔁  Looping to ${VIDEO_DURATION_SECS}s…`);
@@ -659,7 +716,7 @@ function synthesizeAmbientAudio(destPath) {
     ]);
 }
 
-/** Orchestrator: try Freesound → ccMixter → Internet Archive → ffmpeg synthesis. */
+/** Orchestrator: try Freesound → Internet Archive → ffmpeg synthesis. */
 async function collectAudio() {
     const musicPath = path.join(MUSIC_DIR, 'om-devotional-ambient.aac');
     if (fs.existsSync(musicPath)) {
@@ -671,13 +728,10 @@ async function collectAudio() {
 
     const fsSuccess = await fetchFreesoundAudio(musicPath);
     if (!fsSuccess) {
-        const ccSuccess = await fetchCcMixterAudio(musicPath);
-        if (!ccSuccess) {
-            const iaSuccess = await fetchInternetArchiveAudio(musicPath);
-            if (!iaSuccess) {
-                console.warn('  ⚠  All download sources unavailable; falling back to local synthesis.');
-                synthesizeAmbientAudio(musicPath);
-            }
+        const iaSuccess = await fetchInternetArchiveAudio(musicPath);
+        if (!iaSuccess) {
+            console.warn('  ⚠  All download sources unavailable; falling back to local synthesis.');
+            synthesizeAmbientAudio(musicPath);
         }
     }
 

@@ -16,10 +16,13 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install ffmpeg
+      - name: Install ffmpeg and ClamAV
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          sudo apt-get install -y ffmpeg clamav clamav-daemon
+          # Update virus definitions before downloading any content
+          sudo systemctl stop clamav-freshclam 2>/dev/null || true
+          sudo freshclam --quiet
 
       - name: Install dependencies
         run: npm install

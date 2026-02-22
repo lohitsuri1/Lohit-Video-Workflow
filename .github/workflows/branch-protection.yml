@@ -1,0 +1,79 @@
+name: Setup Branch Protection
+
+# This workflow configures branch protection rules on the main branch.
+# Run it manually once after setting up the repository, or it will run
+# automatically whenever this file itself changes.
+#
+# Rules enforced:
+#   - Pull request required before merging (1 approving review)
+#   - Stale reviews dismissed when new commits are pushed
+#   - Required status checks must pass (generate-video workflow)
+#   - Branches must be up to date before merging
+#   - No force pushes
+#   - No branch deletion
+#   - Required linear history (no merge commits)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/branch-protection.yml'
+
+jobs:
+  protect-main:
+    runs-on: ubuntu-latest
+    permissions:
+      # 'administration: write' is the correct GitHub Actions permission scope
+      # for the branch protection REST API (PUT /repos/{owner}/{repo}/branches/{branch}/protection).
+      # This is distinct from 'contents: write'; see:
+      # https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/controlling-permissions-for-github_token#available-permissions
+      administration: write
+
+    steps:
+      - name: Apply branch protection rules to main
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.updateBranchProtection({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              branch: 'main',
+
+              // Require branches to be up to date and all listed checks to pass
+              required_status_checks: {
+                strict: true,
+                contexts: [
+                  'generate-video',
+                ],
+              },
+
+              // Require at least 1 pull-request approval; dismiss stale reviews
+              required_pull_request_reviews: {
+                required_approving_review_count: 1,
+                dismiss_stale_reviews: true,
+                require_code_owner_reviews: false,
+              },
+
+              // Apply rules to admins too – ensures no one bypasses protection
+              enforce_admins: true,
+
+              // No restrictions on who can push (handled by PR requirement above)
+              restrictions: null,
+
+              // Prevent force-pushes and branch deletion
+              allow_force_pushes: false,
+              allow_deletions: false,
+
+              // Enforce linear history (rebase/squash merge only)
+              required_linear_history: true,
+            });
+
+            core.info('✅ Branch protection rules applied to main:');
+            core.info('   • 1 PR review required');
+            core.info('   • Stale reviews dismissed');
+            core.info('   • generate-video status check required');
+            core.info('   • Strict: branch must be up to date');
+            core.info('   • Enforce admins: enabled (no bypasses)');
+            core.info('   • Deletion: disabled');
+            core.info('   • Linear history: required');
